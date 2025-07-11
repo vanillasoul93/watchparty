@@ -15,22 +15,26 @@ export default function FeaturedMovies() {
     {
       title: "Inception",
       genre: "Sci-Fi",
-      imageUrl: "https://placehold.co/400x600/1a202c/ffffff?text=Inception",
+      imageUrl:
+        "https://image.tmdb.org/t/p/w600_and_h900_bestv2/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
     },
     {
       title: "The Matrix",
       genre: "Sci-Fi",
-      imageUrl: "https://placehold.co/400x600/1a202c/ffffff?text=The+Matrix",
+      imageUrl:
+        "https://image.tmdb.org/t/p/w600_and_h900_bestv2/p96dm7sCMn4VYAStA6siNz30G1r.jpg",
     },
     {
       title: "Interstellar",
       genre: "Sci-Fi",
-      imageUrl: "https://placehold.co/400x600/1a202c/ffffff?text=Interstellar",
+      imageUrl:
+        "https://image.tmdb.org/t/p/w600_and_h900_bestv2/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
     },
     {
       title: "Parasite",
       genre: "Thriller",
-      imageUrl: "https://placehold.co/400x600/1a202c/ffffff?text=Parasite",
+      imageUrl:
+        "https://image.tmdb.org/t/p/w600_and_h900_bestv2/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",
     },
   ];
   return (
@@ -38,7 +42,7 @@ export default function FeaturedMovies() {
       <section className="py-20 bg-gray-900">
         <div className="container mx-auto px-4">
           <h2 className="text-4xl font-bold text-white text-center mb-12">
-            Featured Movies
+            Popular Movies
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {featuredMovies.map((movie) => (

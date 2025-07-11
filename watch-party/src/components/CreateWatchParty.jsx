@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
+import { useAuth } from "../contexts/Auth";
 import {
   Film,
   Clock,
@@ -8,66 +10,142 @@ import {
   Star,
   ListVideo,
   Copy,
+  Trash2,
+  Search,
 } from "lucide-react";
 
-// Mock movie data - you can replace this with a real API call
-const mockMovieApi = [
-  "Inception",
-  "The Matrix",
-  "Interstellar",
-  "Parasite",
-  "The Godfather",
-  "Pulp Fiction",
-  "The Dark Knight",
-  "Forrest Gump",
-  "Fight Club",
-  "Goodfellas",
-  "The Shawshank Redemption",
-  "Se7en",
-  "The Silence of the Lambs",
-  "Star Wars: Episode IV - A New Hope",
-  "Jurassic Park",
-  "Back to the Future",
-  "The Lion King",
-  "Spirited Away",
-  "Gladiator",
-  "Saving Private Ryan",
-  "The Departed",
-  "Whiplash",
-  "The Prestige",
-  "Alien",
-  "Blade Runner 2049",
-];
+// --- TMDB API Helper ---
+const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
+const tmdbBaseUrl = "https://api.themoviedb.org/3";
+const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
+
+const getMovieDetails = async (movieId) => {
+  try {
+    const response = await fetch(
+      `${tmdbBaseUrl}/movie/${movieId}?api_key=${tmdbApiKey}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch movie details");
+    const data = await response.json();
+    return {
+      id: data.id,
+      title: data.title,
+      year: data.release_date ? data.release_date.split("-")[0] : "N/A",
+      imageUrl: data.poster_path
+        ? `${tmdbImageUrl}${data.poster_path}`
+        : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
+      runtime: data.runtime || 0,
+    };
+  } catch (error) {
+    console.error("Error fetching movie details:", error);
+    return null;
+  }
+};
+
+const searchTMDb = async (query) => {
+  if (!query) return [];
+  try {
+    const response = await fetch(
+      `${tmdbBaseUrl}/search/movie?api_key=${tmdbApiKey}&query=${encodeURIComponent(
+        query
+      )}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch from TMDB");
+    const data = await response.json();
+    const detailedResults = await Promise.all(
+      data.results.map((movie) => getMovieDetails(movie.id))
+    );
+    return detailedResults.filter(Boolean);
+  } catch (error) {
+    console.error("Error searching TMDB:", error);
+    return [];
+  }
+};
+// --- End TMDB API Helper ---
+
+const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleSearch = async (e) => {
+    const query = e.target.value;
+    setSearchTerm(query);
+    if (query.length < 2) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    const searchResults = await searchTMDb(query);
+    setResults(searchResults.filter((res) => !existingIds.includes(res.id)));
+    setLoading(false);
+  };
+
+  const handleSelectMovie = (movie) => {
+    onSelect(movie);
+    setSearchTerm("");
+    setResults([]);
+  };
+
+  return (
+    <div className="relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Search className="text-gray-400" size={20} />
+      </div>
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={handleSearch}
+        className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+        placeholder="Search for a movie..."
+      />
+      {loading && (
+        <p className="text-sm text-gray-400 mt-1 pl-2">Searching...</p>
+      )}
+      {results.length > 0 && (
+        <ul className="absolute z-10 w-full bg-gray-800 border-2 border-gray-700 rounded-lg mt-1 max-h-60 overflow-y-auto">
+          {results.map((movie) => (
+            <li
+              key={movie.id}
+              onClick={() => handleSelectMovie(movie)}
+              className="px-4 py-2 text-white hover:bg-indigo-600 cursor-pointer flex items-center gap-4"
+            >
+              <img
+                src={movie.imageUrl}
+                alt={movie.title}
+                className="w-10 h-16 object-cover rounded"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src =
+                    "https://placehold.co/40x60/1a202c/ffffff?text=Err";
+                }}
+              />
+              <span>
+                {movie.title} ({movie.year})
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const CreateWatchParty = () => {
-  // State for form inputs
+  const { user } = useAuth();
   const [partyName, setPartyName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [inviteCode, setInviteCode] = useState(null);
-  const [featuredMovie, setFeaturedMovie] = useState("");
+  const [featuredMovie, setFeaturedMovie] = useState(null);
   const [votableMovies, setVotableMovies] = useState([]);
-  const [votableMovieInput, setVotableMovieInput] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
-  const [friends, setFriends] = useState([]);
-  const [friendInput, setFriendInput] = useState("");
+  const [votingEnabled, setVotingEnabled] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [formMessage, setFormMessage] = useState("");
 
-  // State for autocomplete suggestions
-  const [featuredMovieSuggestions, setFeaturedMovieSuggestions] = useState([]);
-  const [votableMovieSuggestions, setVotableMovieSuggestions] = useState([]);
+  const generateInviteCode = () =>
+    Math.random().toString(36).substring(2, 7).toUpperCase();
 
-  // --- Helper Functions ---
-
-  // Generates a random 5-character alphanumeric code
-  const generateInviteCode = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let result = "";
-    for (let i = 0; i < 5; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  };
-
-  // Copies text to the clipboard
   const copyToClipboard = (text) => {
     const textArea = document.createElement("textarea");
     textArea.value = text;
@@ -82,128 +160,87 @@ const CreateWatchParty = () => {
     document.body.removeChild(textArea);
   };
 
-  // Effect to generate or clear invite code when visibility changes
   useEffect(() => {
-    if (!isPublic) {
-      setInviteCode(generateInviteCode());
-    } else {
-      setInviteCode(null);
-    }
+    if (!isPublic) setInviteCode(generateInviteCode());
+    else setInviteCode(null);
   }, [isPublic]);
 
-  // --- Autocomplete Handlers ---
-
-  const handleFeaturedMovieChange = (e) => {
-    const value = e.target.value;
-    setFeaturedMovie(value);
-    if (value.length > 1) {
-      const filtered = mockMovieApi.filter((movie) =>
-        movie.toLowerCase().includes(value.toLowerCase())
-      );
-      setFeaturedMovieSuggestions(filtered);
-    } else {
-      setFeaturedMovieSuggestions([]);
-    }
-  };
-
-  const handleVotableMovieChange = (e) => {
-    const value = e.target.value;
-    setVotableMovieInput(value);
-    if (value.length > 1) {
-      const filtered = mockMovieApi.filter(
-        (movie) =>
-          movie.toLowerCase().includes(value.toLowerCase()) &&
-          !votableMovies.includes(movie) &&
-          featuredMovie !== movie
-      );
-      setVotableMovieSuggestions(filtered);
-    } else {
-      setVotableMovieSuggestions([]);
-    }
-  };
-
-  const selectFeaturedMovie = (movie) => {
-    setFeaturedMovie(movie);
-    setFeaturedMovieSuggestions([]);
-  };
-
-  const selectVotableMovie = (movie) => {
-    if (!votableMovies.includes(movie) && votableMovies.length < 10) {
+  const handleAddVotableMovie = (movie) => {
+    if (votableMovies.length < 10) {
       setVotableMovies([...votableMovies, movie]);
     }
-    setVotableMovieInput("");
-    setVotableMovieSuggestions([]);
   };
 
-  // --- List Management Handlers ---
-
-  const handleAddVotableMovie = () => {
-    if (
-      votableMovieInput &&
-      !votableMovies.includes(votableMovieInput) &&
-      votableMovies.length < 10
-    ) {
-      setVotableMovies([...votableMovies, votableMovieInput]);
-      setVotableMovieInput("");
+  const handleFeaturedMovieSelected = (movie) => {
+    if (votableMovies.length < 10) {
+      setFeaturedMovie([movie]);
     }
   };
 
-  const handleRemoveVotableMovie = (movieToRemove) => {
-    setVotableMovies(votableMovies.filter((movie) => movie !== movieToRemove));
+  const handleRemoveVotableMovie = (index) => {
+    const newVotableMovies = [...votableMovies];
+    newVotableMovies.splice(index, 1);
+    setVotableMovies(newVotableMovies);
   };
 
-  const handleAddFriend = () => {
-    if (friendInput && !friends.includes(friendInput)) {
-      setFriends([...friends, friendInput]);
-      setFriendInput("");
-    }
-  };
-
-  const handleRemoveFriend = (friendToRemove) => {
-    setFriends(friends.filter((friend) => friend !== friendToRemove));
-  };
-
-  // --- Form Submission ---
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log({
-      partyName,
-      isPublic,
-      inviteCode,
-      featuredMovie,
-      votableMovies,
-      scheduleTime,
-      friends,
-    });
-    const confirmationMessage = document.getElementById("confirmation-message");
-    if (confirmationMessage) {
-      confirmationMessage.style.display = "block";
-      setTimeout(() => {
-        confirmationMessage.style.display = "none";
-      }, 3000);
+    if (!featuredMovie) {
+      setFormError("You must select a featured film.");
+      return;
     }
+    setLoading(true);
+    setFormError(null);
+    setFormMessage("");
+
+    const partyData = {
+      party_name: partyName,
+      conductor_id: user.id,
+      conductor_username: user.user_metadata?.username || "conductor",
+      is_public: isPublic,
+      invite_code: inviteCode,
+      status: "active",
+      featured_movie: featuredMovie.title,
+      featured_movie_image_url: featuredMovie.imageUrl,
+      featured_movie_tmdb_id: featuredMovie.id, // Save the TMDB ID
+      poll_movies: votableMovies,
+      voting_open: votingEnabled,
+      scheduled_start_time: scheduleTime,
+      actual_start_time: new Date().toISOString(),
+      viewers_count: 1,
+      watching_users: [
+        {
+          userId: user.id,
+          username: user.user_metadata?.username || "conductor",
+        },
+      ],
+    };
+
+    const { error } = await supabase.from("watch_parties").insert([partyData]);
+
+    if (error) {
+      console.error("Error creating party:", error);
+      setFormError("Could not create the watch party. Please try again.");
+    } else {
+      setFormMessage("Success! Your watch party has been created.");
+      setPartyName("");
+      setFeaturedMovie(null);
+      setVotableMovies([]);
+      setVotingEnabled(false);
+    }
+    setLoading(false);
   };
 
   return (
     <div className="bg-gray-800 min-h-screen pt-24 pb-12 flex items-center justify-center">
       <div className="bg-gray-900 p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 relative">
-        <div
-          id="confirmation-message"
-          className="hidden absolute top-5 right-5 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-20"
-        >
-          Watch Party Created!
-        </div>
-
         <h1 className="text-4xl font-bold text-white text-center mb-2">
           Create Your Watch Party
         </h1>
         <p className="text-gray-400 text-center mb-8">
           Fill out the details below to get started.
         </p>
-
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Party Name Input */}
           <div>
             <label
               htmlFor="partyName"
@@ -216,50 +253,81 @@ const CreateWatchParty = () => {
               id="partyName"
               value={partyName}
               onChange={(e) => setPartyName(e.target.value)}
-              className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3"
               placeholder="e.g., Friday Night Movie Marathon"
               required
             />
           </div>
-
-          {/* Public/Private Toggle */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Party Visibility
-            </label>
-            <div className="flex items-center space-x-4">
-              <span
-                className={`font-medium transition-colors ${
-                  isPublic ? "text-white" : "text-gray-500"
-                }`}
-              >
-                Public
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsPublic(!isPublic)}
-                className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                  isPublic ? "bg-indigo-600" : "bg-gray-600"
-                }`}
-              >
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Party Visibility
+              </label>
+              <div className="flex items-center space-x-4">
                 <span
-                  aria-hidden="true"
-                  className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
-                    isPublic ? "translate-x-5" : "translate-x-0"
+                  className={`font-medium transition-colors ${
+                    isPublic ? "text-white" : "text-gray-500"
                   }`}
-                />
-              </button>
-              <span
-                className={`font-medium transition-colors ${
-                  !isPublic ? "text-white" : "text-gray-500"
-                }`}
-              >
-                Private
-              </span>
+                >
+                  Public
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(!isPublic)}
+                  className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    isPublic ? "bg-indigo-600" : "bg-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                      isPublic ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span
+                  className={`font-medium transition-colors ${
+                    !isPublic ? "text-white" : "text-gray-500"
+                  }`}
+                >
+                  Private
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Enable Voting
+              </label>
+              <div className="flex items-center space-x-4">
+                <span
+                  className={`font-medium transition-colors ${
+                    !votingEnabled ? "text-white" : "text-gray-500"
+                  }`}
+                >
+                  Off
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setVotingEnabled(!votingEnabled)}
+                  className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    votingEnabled ? "bg-indigo-600" : "bg-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                      votingEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span
+                  className={`font-medium transition-colors ${
+                    votingEnabled ? "text-white" : "text-gray-500"
+                  }`}
+                >
+                  On
+                </span>
+              </div>
             </div>
           </div>
-
-          {/* Invite Code Display */}
           {!isPublic && inviteCode && (
             <div className="bg-gray-800 border-2 border-dashed border-gray-700 rounded-lg p-4 text-center">
               <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -279,121 +347,70 @@ const CreateWatchParty = () => {
               </div>
             </div>
           )}
-
-          {/* Featured Movie Input with Autocomplete */}
-          <div className="relative">
-            <label
-              htmlFor="featuredMovie"
-              className="block text-sm font-medium text-gray-300 mb-2"
-            >
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Featured Film
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Star className="text-yellow-400" size={20} />
+            {featuredMovie ? (
+              <div className="flex items-center bg-gray-800 p-3 rounded-lg gap-4">
+                <img
+                  src={featuredMovie.imageUrl}
+                  alt={featuredMovie.title}
+                  className="w-16 h-24 object-cover rounded-md"
+                />
+                <div className="flex-grow">
+                  <h4 className="font-bold text-white">
+                    {featuredMovie.title}
+                  </h4>
+                  <p className="text-sm text-gray-400">{featuredMovie.year}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFeaturedMovie(featuredMovie)}
+                  className="p-2 text-gray-400 hover:text-red-500"
+                >
+                  <X size={20} />
+                </button>
               </div>
-              <input
-                type="text"
-                id="featuredMovie"
-                value={featuredMovie}
-                onChange={handleFeaturedMovieChange}
-                onBlur={() =>
-                  setTimeout(() => setFeaturedMovieSuggestions([]), 200)
-                }
-                className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                placeholder="Search for the main movie..."
-                required
-                autoComplete="off"
-              />
-            </div>
-            {featuredMovieSuggestions.length > 0 && (
-              <ul className="absolute z-10 w-full bg-gray-800 border-2 border-gray-700 rounded-lg mt-1 max-h-48 overflow-y-auto">
-                {featuredMovieSuggestions.map((movie) => (
-                  <li
-                    key={movie}
-                    onClick={() => selectFeaturedMovie(movie)}
-                    className="px-4 py-2 text-white hover:bg-indigo-600 cursor-pointer"
-                  >
-                    {movie}
-                  </li>
-                ))}
-              </ul>
+            ) : (
+              <MovieSearchInput onSelect={setFeaturedMovie} />
             )}
           </div>
-
-          {/* Votable Movies Input with Autocomplete */}
-          <div className="relative">
-            <label
-              htmlFor="votableMovies"
-              className="block text-sm font-medium text-gray-300 mb-2"
-            >
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Movies to Vote On (up to 10)
             </label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <ListVideo className="text-gray-400" size={20} />
-                </div>
-                <input
-                  type="text"
-                  id="votableMovies"
-                  value={votableMovieInput}
-                  onChange={handleVotableMovieChange}
-                  onBlur={() =>
-                    setTimeout(() => setVotableMovieSuggestions([]), 200)
-                  }
-                  className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  placeholder="Add a movie to the voting list"
-                  disabled={votableMovies.length >= 10}
-                  autoComplete="off"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleAddVotableMovie}
-                className="bg-indigo-600 text-white p-3 rounded-lg hover:bg-indigo-700 transition disabled:bg-gray-600"
-                disabled={votableMovies.length >= 10}
-              >
-                <PlusCircle size={24} />
-              </button>
-            </div>
-            {votableMovieSuggestions.length > 0 && (
-              <ul className="absolute z-10 w-full bg-gray-800 border-2 border-gray-700 rounded-lg mt-1 max-h-48 overflow-y-auto">
-                {votableMovieSuggestions.map((movie) => (
-                  <li
-                    key={movie}
-                    onClick={() => selectVotableMovie(movie)}
-                    className="px-4 py-2 text-white hover:bg-indigo-600 cursor-pointer"
-                  >
-                    {movie}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {votableMovies.length >= 10 && (
-              <p className="text-red-500 text-xs mt-2">
-                You have reached the 10 movie limit.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 mt-4">
-              {votableMovies.map((movie) => (
-                <span
-                  key={movie}
-                  className="bg-gray-700 text-white text-sm font-medium px-3 py-1 rounded-full flex items-center gap-2"
+            <div className="space-y-3">
+              {votableMovies.map((movie, index) => (
+                <div
+                  key={movie.id}
+                  className="flex items-center bg-gray-800 p-2 rounded-lg gap-3"
                 >
-                  {movie}
+                  <img
+                    src={movie.imageUrl}
+                    alt={movie.title}
+                    className="w-10 h-16 object-cover rounded-md"
+                  />
+                  <p className="flex-grow text-white">{movie.title}</p>
                   <button
                     type="button"
-                    onClick={() => handleRemoveVotableMovie(movie)}
+                    onClick={() => handleRemoveVotableMovie(index)}
+                    className="p-2 text-gray-400 hover:text-red-500"
                   >
-                    <X size={16} className="hover:text-red-500 transition" />
+                    <Trash2 size={18} />
                   </button>
-                </span>
+                </div>
               ))}
             </div>
+            {votableMovies.length < 10 && (
+              <div className="mt-3">
+                <MovieSearchInput
+                  onSelect={handleAddVotableMovie}
+                  existingIds={votableMovies.map((m) => m.id)}
+                />
+              </div>
+            )}
           </div>
-
-          {/* Schedule Time Input */}
           <div>
             <label
               htmlFor="scheduleTime"
@@ -401,76 +418,30 @@ const CreateWatchParty = () => {
             >
               Schedule Time
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Clock className="text-gray-400" size={20} />
-              </div>
-              <input
-                type="datetime-local"
-                id="scheduleTime"
-                value={scheduleTime}
-                onChange={(e) => setScheduleTime(e.target.value)}
-                className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                required
-              />
-            </div>
+            <input
+              type="datetime-local"
+              id="scheduleTime"
+              value={scheduleTime}
+              onChange={(e) => setScheduleTime(e.target.value)}
+              className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3"
+              required
+            />
           </div>
-
-          {/* Invite Friends Input */}
-          <div>
-            <label
-              htmlFor="friends"
-              className="block text-sm font-medium text-gray-300 mb-2"
+          <div className="pt-2">
+            {formError && (
+              <p className="text-red-500 text-center mb-4">{formError}</p>
+            )}
+            {formMessage && (
+              <p className="text-green-500 text-center mb-4">{formMessage}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition disabled:opacity-50"
             >
-              Invite Friends (Usernames)
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Users className="text-gray-400" size={20} />
-                </div>
-                <input
-                  type="text"
-                  id="friends"
-                  value={friendInput}
-                  onChange={(e) => setFriendInput(e.target.value)}
-                  className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  placeholder="Add a friend's username"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleAddFriend}
-                className="bg-indigo-600 text-white p-3 rounded-lg hover:bg-indigo-700 transition"
-              >
-                <PlusCircle size={24} />
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-4">
-              {friends.map((friend) => (
-                <span
-                  key={friend}
-                  className="bg-gray-700 text-white text-sm font-medium px-3 py-1 rounded-full flex items-center gap-2"
-                >
-                  {friend}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFriend(friend)}
-                  >
-                    <X size={16} className="hover:text-red-500 transition" />
-                  </button>
-                </span>
-              ))}
-            </div>
+              {loading ? "Creating Party..." : "Create Watch Party"}
+            </button>
           </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-indigo-600/40"
-          >
-            Create Watch Party
-          </button>
         </form>
       </div>
     </div>

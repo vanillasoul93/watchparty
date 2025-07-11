@@ -24,13 +24,12 @@ export default function Hero({ setActiveLink }) {
         ></div>
         <div className="container mx-auto px-4 relative z-10">
           <h1 className="text-5xl md:text-7xl font-extrabold mb-4 leading-tight tracking-tighter animate-fade-in-down">
-            Watch Movies Together.{" "}
+            Watch More Together.{" "}
             <span className="text-indigo-400">Anywhere.</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto mb-8 animate-fade-in-up">
-            Sync your favorite movies and shows with friends and family in
-            perfect harmony. Create private watch parties, chat, and enjoy movie
-            night like never before.
+            Set up watch parties and movie logs for remotely watching movies
+            together with friends.
           </p>
           {/* This button now changes the active page to 'Create Party' */}
           <button
