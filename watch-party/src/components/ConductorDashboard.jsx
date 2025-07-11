@@ -15,6 +15,9 @@ import {
   FilmIcon,
   PlusCircle,
   Search,
+  Check,
+  X,
+  Trash2,
 } from "lucide-react";
 
 // --- TMDB API Helper ---
@@ -141,7 +144,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   const { user } = useAuth();
   const [party, setParty] = useState(null);
   const [watchedMovieDetails, setWatchedMovieDetails] = useState([]);
-  const [featuredMovieDetails, setFeaturedMovieDetails] = useState(null); // New state for detailed featured movie
+  const [featuredMovieDetails, setFeaturedMovieDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [intermissionTime, setIntermissionTime] = useState(0);
@@ -176,15 +179,21 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   useEffect(() => {
     const fetchAllMovieDetails = async () => {
       if (party) {
-        // Fetch details for the featured movie
         if (party.featured_movie_tmdb_id) {
           const details = await getMovieDetails(party.featured_movie_tmdb_id);
           setFeaturedMovieDetails(details);
+        } else {
+          setFeaturedMovieDetails(null); // Clear if no featured movie
         }
-        // Fetch details for the watched movies list
+        // The `movies_watched` column now stores objects like {id, status}
         if (party.movies_watched && party.movies_watched.length > 0) {
-          const movieDetailsPromises = party.movies_watched.map((id) =>
-            getMovieDetails(id)
+          const movieDetailsPromises = party.movies_watched.map(
+            async (watchedInfo) => {
+              const details = await getMovieDetails(watchedInfo.id);
+              return details
+                ? { ...details, status: watchedInfo.status }
+                : null;
+            }
           );
           const detailedMovies = await Promise.all(movieDetailsPromises);
           setWatchedMovieDetails(detailedMovies.filter(Boolean));
@@ -194,7 +203,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       }
     };
     fetchAllMovieDetails();
-  }, [party]); // Re-run whenever the party data changes
+  }, [party]);
 
   useEffect(() => {
     if (intermissionTime > 0) {
@@ -267,30 +276,44 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     setIsAddingToPoll(false);
   };
 
-  const handleNextMovie = () => {
-    if (!upNextMovie) {
-      setError("No movie is queued up next. Close a poll to select one.");
-      setTimeout(() => setError(""), 5000);
-      return;
+  // **FIXED**: Consolidated and corrected playlist advancement logic.
+  const advancePlaylist = (statusOfFinishedMovie) => {
+    // 1. Record the movie that just finished
+    const finishedMovie = {
+      id: party.featured_movie_tmdb_id,
+      status: statusOfFinishedMovie,
+    };
+    const newWatchedList = [...(party.movies_watched || []), finishedMovie];
+
+    // 2. Check if there's a movie queued up
+    if (upNextMovie) {
+      // 3a. If yes, promote the "Up Next" movie to "Now Playing"
+      const newPollList = party.poll_movies.filter(
+        (movie) => movie.id !== upNextMovie.id
+      );
+      updatePartyStatus({
+        featured_movie_tmdb_id: upNextMovie.id,
+        movies_watched: newWatchedList,
+        poll_movies: newPollList,
+      });
+      setUpNextMovie(null); // Clear the queue
+    } else {
+      // 3b. If no movie is up next, clear the featured movie and open the poll
+      updatePartyStatus({
+        featured_movie_tmdb_id: null,
+        movies_watched: newWatchedList,
+        voting_open: true,
+      });
     }
+  };
 
-    const newWatchedList = [
-      ...(party.movies_watched || []),
-      party.featured_movie_tmdb_id,
-    ];
-    const newPollList = party.poll_movies.filter(
-      (movie) => movie.id !== upNextMovie.id
-    );
+  const handleMarkAsWatched = () => advancePlaylist("watched");
+  const handleSkipMovie = () => advancePlaylist("skipped");
 
-    updatePartyStatus({
-      featured_movie: upNextMovie.title,
-
-      featured_movie_tmdb_id: upNextMovie.id,
-      movies_watched: newWatchedList,
-      poll_movies: newPollList,
-    });
-
-    setUpNextMovie(null);
+  const handleRemoveFromWatched = (indexToRemove) => {
+    const currentWatchedList = [...(party.movies_watched || [])];
+    currentWatchedList.splice(indexToRemove, 1);
+    updatePartyStatus({ movies_watched: currentWatchedList });
   };
 
   const handleCrashParty = () => {
@@ -368,21 +391,36 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                   {watchedMovieDetails.map((movie, index) => (
                     <li
                       key={movie.id || index}
-                      className="flex items-center gap-3 opacity-60"
+                      className="flex items-center justify-between gap-3 opacity-60"
                     >
-                      <img
-                        src={movie.imageUrl}
-                        alt={movie.title}
-                        className="w-12 h-18 object-cover rounded"
-                      />
-                      <div>
-                        <p className="text-sm text-gray-300">
-                          {movie.title} ({movie.year})
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {movie.runtime} min
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={movie.imageUrl}
+                          alt={movie.title}
+                          className="w-12 h-18 object-cover rounded"
+                        />
+                        <div>
+                          <p className="text-sm text-gray-300">
+                            {movie.title} ({movie.year})
+                          </p>
+                          {movie.status === "watched" && (
+                            <span className="text-xs font-bold text-green-400">
+                              Watched
+                            </span>
+                          )}
+                          {movie.status === "skipped" && (
+                            <span className="text-xs font-bold text-yellow-400">
+                              Skipped
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={() => handleRemoveFromWatched(index)}
+                        className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </li>
                   ))}
                   {featuredMovieDetails && (
@@ -486,17 +524,20 @@ const ConductorDashboard = ({ partyId, onBack }) => {
               </div>
               <div className="bg-gray-900 p-4 rounded-lg">
                 <h3 className="font-bold text-white mb-4">Movie Controls</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <button className="bg-gray-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-gray-700">
-                    <SkipBack size={24} />
-                    <span>Previous</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={handleMarkAsWatched}
+                    className="bg-gray-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-gray-700"
+                  >
+                    <Check size={24} />
+                    <span>Mark Watched</span>
                   </button>
                   <button
-                    onClick={handleNextMovie}
+                    onClick={handleSkipMovie}
                     className="bg-gray-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-gray-700"
                   >
                     <SkipForward size={24} />
-                    <span>Next Movie</span>
+                    <span>Skip Movie</span>
                   </button>
                 </div>
               </div>
