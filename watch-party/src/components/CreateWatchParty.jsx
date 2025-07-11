@@ -95,7 +95,7 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
         type="text"
         value={searchTerm}
         onChange={handleSearch}
-        className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+        className="w-full bg-gray-800 border-2 border-gray-700 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
         placeholder="Search for a movie..."
       />
       {loading && (
@@ -171,12 +171,6 @@ const CreateWatchParty = () => {
     }
   };
 
-  const handleFeaturedMovieSelected = (movie) => {
-    if (votableMovies.length < 10) {
-      setFeaturedMovie([movie]);
-    }
-  };
-
   const handleRemoveVotableMovie = (index) => {
     const newVotableMovies = [...votableMovies];
     newVotableMovies.splice(index, 1);
@@ -200,9 +194,13 @@ const CreateWatchParty = () => {
       is_public: isPublic,
       invite_code: inviteCode,
       status: "active",
+      // Static featured movie info
       featured_movie: featuredMovie.title,
       featured_movie_image_url: featuredMovie.imageUrl,
-      featured_movie_tmdb_id: featuredMovie.id, // Save the TMDB ID
+      // Dynamic "now playing" info, starting with the featured movie
+      now_playing_tmdb_id: featuredMovie.id,
+      now_playing_title: featuredMovie.title,
+      now_playing_image_url: featuredMovie.imageUrl,
       poll_movies: votableMovies,
       voting_open: votingEnabled,
       scheduled_start_time: scheduleTime,
@@ -214,6 +212,7 @@ const CreateWatchParty = () => {
           username: user.user_metadata?.username || "conductor",
         },
       ],
+      party_state: { status: "playing" }, // Start in a playing state
     };
 
     const { error } = await supabase.from("watch_parties").insert([partyData]);
@@ -366,7 +365,7 @@ const CreateWatchParty = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setFeaturedMovie(featuredMovie)}
+                  onClick={() => setFeaturedMovie(null)}
                   className="p-2 text-gray-400 hover:text-red-500"
                 >
                   <X size={20} />

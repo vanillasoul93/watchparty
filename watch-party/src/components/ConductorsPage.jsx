@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
-import { useAuth } from "../contexts/Auth"; // Import useAuth to identify the current user
+import { useAuth } from "../contexts/Auth";
 import {
   PlayCircle,
   CheckCircle,
@@ -12,7 +12,39 @@ import {
   Star,
   LayoutDashboard,
   RefreshCw,
+  PauseCircle,
+  SkipForward,
+  Timer,
 } from "lucide-react";
+
+// --- TMDB API Helper ---
+const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
+const tmdbBaseUrl = "https://api.themoviedb.org/3";
+const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
+
+const getMovieDetails = async (movieId) => {
+  if (!movieId) return null;
+  try {
+    const response = await fetch(
+      `${tmdbBaseUrl}/movie/${movieId}?api_key=${tmdbApiKey}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch movie details");
+    const data = await response.json();
+    return {
+      id: data.id,
+      title: data.title,
+      year: data.release_date ? data.release_date.split("-")[0] : "N/A",
+      imageUrl: data.poster_path
+        ? `${tmdbImageUrl}${data.poster_path}`
+        : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
+      runtime: data.runtime || 0,
+    };
+  } catch (error) {
+    console.error("Error fetching movie details:", error);
+    return null;
+  }
+};
+// --- End TMDB API Helper ---
 
 const PartyCard = ({
   party,
@@ -21,24 +53,76 @@ const PartyCard = ({
   onReopenParty,
   onSelectDashboard,
 }) => {
-  const formatTime = (time) => new Date(time).toLocaleString();
-  const isConductor = currentUser && currentUser.id === party.conductor_id;
+  const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
+  const [upNextDetails, setUpNextDetails] = useState(null);
+  const [intermissionTime, setIntermissionTime] = useState(0);
 
-  // Check if the party can be reopened (concluded within the last hour)
+  useEffect(() => {
+    const fetchCardMovieDetails = async () => {
+      if (party.now_playing_tmdb_id) {
+        const details = await getMovieDetails(party.now_playing_tmdb_id);
+        setNowPlayingDetails(details);
+      } else {
+        setNowPlayingDetails(null);
+      }
+
+      if (party.up_next_tmdb_id) {
+        const details = await getMovieDetails(party.up_next_tmdb_id);
+        setUpNextDetails(details);
+      } else {
+        setUpNextDetails(null);
+      }
+    };
+    fetchCardMovieDetails();
+  }, [party.now_playing_tmdb_id, party.up_next_tmdb_id]);
+
+  useEffect(() => {
+    if (
+      party.party_state?.status === "intermission" &&
+      party.party_state.ends_at
+    ) {
+      const endsAt = new Date(party.party_state.ends_at).getTime();
+      const now = new Date().getTime();
+      const remaining = Math.round((endsAt - now) / 1000);
+      setIntermissionTime(remaining > 0 ? remaining : 0);
+    } else {
+      setIntermissionTime(0);
+    }
+  }, [party.party_state]);
+
+  useEffect(() => {
+    if (intermissionTime > 0) {
+      const timer = setTimeout(
+        () => setIntermissionTime(intermissionTime - 1),
+        1000
+      );
+      return () => clearTimeout(timer);
+    }
+  }, [intermissionTime]);
+
+  const formatTime = (time) => new Date(time).toLocaleString();
+  const formatTimer = (seconds) =>
+    `${Math.floor(seconds / 60)}:${("0" + (seconds % 60)).slice(-2)}`;
+  const isConductor = currentUser && currentUser.id === party.conductor_id;
   const canReopen =
     isConductor &&
     party.status === "concluded" &&
     party.end_time &&
-    new Date() - new Date(party.end_time) < 3600000; // 1 hour in milliseconds
+    new Date() - new Date(party.end_time) < 3600000;
+
+  const isPlaying = party.party_state?.status === "playing";
+  const isPaused = party.party_state?.status === "paused";
+  const isIntermission = party.party_state?.status === "intermission";
 
   return (
     <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 hover:border-indigo-500 transition-all duration-300 flex flex-col">
       <img
         src={
+          nowPlayingDetails?.imageUrl ||
           party.featured_movie_image_url ||
           "https://placehold.co/400x225/1a202c/ffffff?text=No+Image"
         }
-        alt={party.featured_movie}
+        alt={nowPlayingDetails?.title || party.featured_movie}
         className="w-full h-48 object-cover rounded-t-xl"
         onError={(e) => {
           e.target.onerror = null;
@@ -73,19 +157,52 @@ const PartyCard = ({
         </div>
 
         <div className="space-y-3 text-gray-300 mb-4">
-          <div className="flex items-center gap-3">
-            <Film size={18} className="text-indigo-400" />
-            <span>
-              Now Playing:{" "}
-              <span className="font-semibold text-white">
-                {party.featured_movie}
-              </span>
-            </span>
-          </div>
           {party.voting_open && (
             <div className="flex items-center gap-3 bg-blue-500/20 text-blue-300 px-3 py-1 rounded-md">
               <Vote size={18} />
               <span className="font-semibold">Voting is Open!</span>
+            </div>
+          )}
+
+          {isIntermission ? (
+            <div className="flex items-center gap-3 p-2 rounded-md bg-yellow-500/20 text-yellow-300">
+              <Timer size={18} />
+              <span>Intermission: {formatTimer(intermissionTime)}</span>
+            </div>
+          ) : (
+            <div
+              className={`flex items-center gap-3 p-2 rounded-md ${
+                isPlaying
+                  ? "bg-green-500/20 text-green-300"
+                  : isPaused
+                  ? "bg-yellow-500/20 text-yellow-300"
+                  : ""
+              }`}
+            >
+              {isPlaying && <PlayCircle size={18} className="text-green-400" />}
+              {isPaused && (
+                <PauseCircle size={18} className="text-yellow-400" />
+              )}
+              {!isPlaying && !isPaused && (
+                <Film size={18} className="text-indigo-400" />
+              )}
+
+              <span>
+                {isPaused ? "Paused: " : "Now Playing: "}
+                <span className="font-semibold text-white ml-1">
+                  {nowPlayingDetails?.title || "N/A"} (
+                  {nowPlayingDetails?.year || "..."})
+                </span>
+              </span>
+            </div>
+          )}
+
+          {upNextDetails && (
+            <div className="flex items-center gap-3 bg-purple-500/20 text-purple-300 px-3 py-1 rounded-md">
+              <SkipForward size={18} />
+              <span className="font-semibold">
+                Up Next: {upNextDetails.title} ({upNextDetails.year})
+              </span>
             </div>
           )}
           <div className="flex items-center gap-3">
@@ -103,7 +220,6 @@ const PartyCard = ({
         </div>
 
         <div className="mt-auto">
-          {/* Conditionally render buttons based on party status */}
           {party.status === "active" ? (
             isConductor ? (
               <div className="flex items-center gap-2">
@@ -146,40 +262,15 @@ const PartyCard = ({
   );
 };
 
-const ConductorsPage = ({ onSelectDashboard }) => {
-  const { user } = useAuth(); // Get the current logged-in user
-  const [activeParties, setActiveParties] = useState([]);
-  const [concludedParties, setConcludedParties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchParties = async () => {
-    setLoading(true);
-    setError(null);
-
-    const { data, error } = await supabase
-      .from("watch_parties")
-      .select("*")
-      .eq("is_public", true)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching parties:", error);
-      setError(error.message);
-    } else {
-      const active = data.filter((p) => p.status === "active");
-      const concluded = data
-        .filter((p) => p.status === "concluded")
-        .slice(0, 10);
-      setActiveParties(active);
-      setConcludedParties(concluded);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchParties();
-  }, []);
+const ConductorsPage = ({
+  activeParties,
+  concludedParties,
+  loading,
+  error,
+  onSelectDashboard,
+  refreshParties,
+}) => {
+  const { user } = useAuth();
 
   const handleCrashParty = async (partyId) => {
     const { error } = await supabase
@@ -188,26 +279,22 @@ const ConductorsPage = ({ onSelectDashboard }) => {
       .eq("id", partyId);
 
     if (error) {
-      setError("Could not end the party. Please try again.");
-      console.error(error);
+      console.error("Could not end the party:", error);
     } else {
-      // Refresh the lists to show the change immediately
-      fetchParties();
+      refreshParties();
     }
   };
 
   const handleReopenParty = async (partyId) => {
     const { error } = await supabase
       .from("watch_parties")
-      .update({ status: "active", end_time: null }) // Set status to active and clear end time
+      .update({ status: "active", end_time: null })
       .eq("id", partyId);
 
     if (error) {
-      setError("Could not re-open the party. Please try again.");
-      console.error(error);
+      console.error("Could not re-open the party:", error);
     } else {
-      // Refresh the lists to show the change immediately
-      fetchParties();
+      refreshParties();
     }
   };
 

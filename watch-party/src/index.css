@@ -1,1 +1,4 @@
 @import "tailwindcss";
+body {
+  background-color: #111827; /* This is the same color as Tailwind's 'bg-gray-900' */
+}

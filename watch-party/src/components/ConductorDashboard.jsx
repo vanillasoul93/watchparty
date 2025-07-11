@@ -25,7 +25,6 @@ const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
 const tmdbBaseUrl = "https://api.themoviedb.org/3";
 const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
 
-// Updated to fetch runtime for each movie
 const getMovieDetails = async (movieId) => {
   if (!movieId) return null;
   try {
@@ -41,7 +40,7 @@ const getMovieDetails = async (movieId) => {
       imageUrl: data.poster_path
         ? `${tmdbImageUrl}${data.poster_path}`
         : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
-      runtime: data.runtime || 0, // Add runtime in minutes
+      runtime: data.runtime || 0,
     };
   } catch (error) {
     console.error("Error fetching movie details:", error);
@@ -59,11 +58,10 @@ const searchTMDb = async (query) => {
     );
     if (!response.ok) throw new Error("Failed to fetch from TMDB");
     const data = await response.json();
-    // Fetch full details for each search result to get runtime
     const detailedResults = await Promise.all(
       data.results.map((movie) => getMovieDetails(movie.id))
     );
-    return detailedResults.filter(Boolean); // Filter out any null results from failed fetches
+    return detailedResults.filter(Boolean);
   } catch (error) {
     console.error("Error searching TMDB:", error);
     return [];
@@ -71,7 +69,6 @@ const searchTMDb = async (query) => {
 };
 // --- End TMDB API Helper ---
 
-// Reusable Movie Search Input Component
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
@@ -144,7 +141,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   const { user } = useAuth();
   const [party, setParty] = useState(null);
   const [watchedMovieDetails, setWatchedMovieDetails] = useState([]);
-  const [featuredMovieDetails, setFeaturedMovieDetails] = useState(null);
+  const [nowPlayingMovieDetails, setNowPlayingMovieDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [intermissionTime, setIntermissionTime] = useState(0);
@@ -153,8 +150,8 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   const [upNextMovie, setUpNextMovie] = useState(null);
   const [isAddingToPoll, setIsAddingToPoll] = useState(false);
   const [showZeroVotesDialog, setShowZeroVotesDialog] = useState(false);
+  const [showCrashConfirmation, setShowCrashConfirmation] = useState(false);
 
-  // This effect fetches the main party data from your database
   useEffect(() => {
     const fetchPartyDetails = async () => {
       if (!partyId) return;
@@ -175,17 +172,23 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     fetchPartyDetails();
   }, [partyId]);
 
-  // This new effect fetches detailed movie info using the TMDB IDs
   useEffect(() => {
     const fetchAllMovieDetails = async () => {
       if (party) {
-        if (party.featured_movie_tmdb_id) {
-          const details = await getMovieDetails(party.featured_movie_tmdb_id);
-          setFeaturedMovieDetails(details);
+        if (party.now_playing_tmdb_id) {
+          const details = await getMovieDetails(party.now_playing_tmdb_id);
+          setNowPlayingMovieDetails(details);
         } else {
-          setFeaturedMovieDetails(null); // Clear if no featured movie
+          setNowPlayingMovieDetails(null);
         }
-        // The `movies_watched` column now stores objects like {id, status}
+
+        if (party.up_next_tmdb_id) {
+          const upNextDetails = await getMovieDetails(party.up_next_tmdb_id);
+          setUpNextMovie(upNextDetails);
+        } else {
+          setUpNextMovie(null);
+        }
+
         if (party.movies_watched && party.movies_watched.length > 0) {
           const movieDetailsPromises = party.movies_watched.map(
             async (watchedInfo) => {
@@ -206,6 +209,20 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   }, [party]);
 
   useEffect(() => {
+    if (
+      party?.party_state?.status === "intermission" &&
+      party.party_state.ends_at
+    ) {
+      const endsAt = new Date(party.party_state.ends_at).getTime();
+      const now = new Date().getTime();
+      const remaining = Math.round((endsAt - now) / 1000);
+      setIntermissionTime(remaining > 0 ? remaining : 0);
+    } else {
+      setIntermissionTime(0);
+    }
+  }, [party]);
+
+  useEffect(() => {
     if (intermissionTime > 0) {
       const timer = setTimeout(
         () => setIntermissionTime(intermissionTime - 1),
@@ -213,7 +230,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       );
       return () => clearTimeout(timer);
     }
-  }, [intermissionTime]);
+  }, [intermissionTime, party?.party_state?.status]);
 
   const updatePartyStatus = async (updates) => {
     const { error } = await supabase
@@ -229,7 +246,10 @@ const ConductorDashboard = ({ partyId, onBack }) => {
 
   const handleStartIntermission = (minutes) => {
     const duration = parseInt(minutes, 10);
-    if (!isNaN(duration) && duration > 0) setIntermissionTime(duration * 60);
+    if (!isNaN(duration) && duration > 0) {
+      const ends_at = new Date(Date.now() + duration * 60000).toISOString();
+      updatePartyStatus({ party_state: { status: "intermission", ends_at } });
+    }
   };
 
   const handleOpenPoll = () => updatePartyStatus({ voting_open: true });
@@ -248,14 +268,20 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       (prev.votes || 0) > (current.votes || 0) ? prev : current
     );
     setUpNextMovie(winner);
-    updatePartyStatus({ voting_open: false });
+    updatePartyStatus({
+      voting_open: false,
+      up_next_tmdb_id: winner.id,
+    });
   };
 
   const handleSelectRandom = () => {
     const randomIndex = Math.floor(Math.random() * party.poll_movies.length);
     const randomMovie = party.poll_movies[randomIndex];
     setUpNextMovie(randomMovie);
-    updatePartyStatus({ voting_open: false });
+    updatePartyStatus({
+      voting_open: false,
+      up_next_tmdb_id: randomMovie.id,
+    });
     setShowZeroVotesDialog(false);
   };
 
@@ -264,7 +290,12 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     handleCrashParty();
   };
 
-  const handleCancelDialog = () => {
+  const handleCancelPoll = () => {
+    updatePartyStatus({ voting_open: false });
+    setShowZeroVotesDialog(false);
+  };
+
+  const handleReturnToPoll = () => {
     setShowZeroVotesDialog(false);
   };
 
@@ -276,39 +307,58 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     setIsAddingToPoll(false);
   };
 
-  // **FIXED**: Consolidated and corrected playlist advancement logic.
-  const advancePlaylist = (statusOfFinishedMovie) => {
-    // 1. Record the movie that just finished
-    const finishedMovie = {
-      id: party.featured_movie_tmdb_id,
-      status: statusOfFinishedMovie,
-    };
-    const newWatchedList = [...(party.movies_watched || []), finishedMovie];
+  const handleRemoveFromPoll = (movieIdToRemove) => {
+    const newPollMovies = party.poll_movies.filter(
+      (movie) => movie.id !== movieIdToRemove
+    );
+    updatePartyStatus({ poll_movies: newPollMovies });
+  };
 
-    // 2. Check if there's a movie queued up
-    if (upNextMovie) {
-      // 3a. If yes, promote the "Up Next" movie to "Now Playing"
+  const handlePlay = () => {
+    if (party?.party_state?.status === "intermission") {
+      updatePartyStatus({ party_state: { status: "playing" } });
+      return;
+    }
+    if (nowPlayingMovieDetails) {
+      updatePartyStatus({ party_state: { status: "playing" } });
+    } else if (upNextMovie) {
       const newPollList = party.poll_movies.filter(
         (movie) => movie.id !== upNextMovie.id
       );
       updatePartyStatus({
-        featured_movie_tmdb_id: upNextMovie.id,
-        movies_watched: newWatchedList,
+        now_playing_tmdb_id: upNextMovie.id,
         poll_movies: newPollList,
+        party_state: { status: "playing" },
+        up_next_tmdb_id: null,
       });
-      setUpNextMovie(null); // Clear the queue
+      setUpNextMovie(null);
     } else {
-      // 3b. If no movie is up next, clear the featured movie and open the poll
-      updatePartyStatus({
-        featured_movie_tmdb_id: null,
-        movies_watched: newWatchedList,
-        voting_open: true,
-      });
+      setError("No movie is queued up. Please select one from the poll.");
+      setTimeout(() => setError(""), 5000);
     }
   };
 
-  const handleMarkAsWatched = () => advancePlaylist("watched");
-  const handleSkipMovie = () => advancePlaylist("skipped");
+  const handlePause = () => {
+    updatePartyStatus({ party_state: { status: "paused" } });
+  };
+
+  const handleFinishMovie = (status) => {
+    if (!nowPlayingMovieDetails) return;
+    const finishedMovie = {
+      id: nowPlayingMovieDetails.id,
+      status: status,
+    };
+    const newWatchedList = [...(party.movies_watched || []), finishedMovie];
+    updatePartyStatus({
+      now_playing_tmdb_id: null,
+      movies_watched: newWatchedList,
+      voting_open: true,
+      party_state: { status: "paused" },
+    });
+  };
+
+  const handleMarkAsWatched = () => handleFinishMovie("watched");
+  const handleSkipMovie = () => handleFinishMovie("skipped");
 
   const handleRemoveFromWatched = (indexToRemove) => {
     const currentWatchedList = [...(party.movies_watched || [])];
@@ -317,11 +367,39 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   };
 
   const handleCrashParty = () => {
-    updatePartyStatus({
+    if (nowPlayingMovieDetails) {
+      setShowCrashConfirmation(true);
+    } else {
+      updatePartyStatus({
+        status: "concluded",
+        end_time: new Date().toISOString(),
+      });
+      onBack();
+    }
+  };
+
+  const handleConfirmCrash = (markAsWatched) => {
+    let updates = {
       status: "concluded",
       end_time: new Date().toISOString(),
-    });
+    };
+
+    if (markAsWatched && nowPlayingMovieDetails) {
+      const finishedMovie = {
+        id: nowPlayingMovieDetails.id,
+        status: "watched",
+      };
+      updates.movies_watched = [...(party.movies_watched || []), finishedMovie];
+      updates.now_playing_tmdb_id = null;
+    }
+
+    updatePartyStatus(updates);
+    setShowCrashConfirmation(false);
     onBack();
+  };
+
+  const handleCancelCrash = () => {
+    setShowCrashConfirmation(false);
   };
 
   if (loading)
@@ -336,6 +414,37 @@ const ConductorDashboard = ({ partyId, onBack }) => {
 
   return (
     <div className="bg-gray-900 min-h-screen pt-24 pb-12">
+      {showCrashConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Crash Party?</h2>
+            <p className="text-gray-300 mb-6">
+              Would you like to mark "{nowPlayingMovieDetails?.title}" as
+              watched before ending the party?
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => handleConfirmCrash(true)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Mark as Watched & Crash
+              </button>
+              <button
+                onClick={() => handleConfirmCrash(false)}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Just Crash Party
+              </button>
+              <button
+                onClick={handleCancelCrash}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showZeroVotesDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl">
@@ -353,16 +462,22 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                 Select Random Movie
               </button>
               <button
+                onClick={handleCancelPoll}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Cancel Poll
+              </button>
+              <button
                 onClick={handleCrashFromDialog}
                 className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
               >
                 Crash Party
               </button>
               <button
-                onClick={handleCancelDialog}
-                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+                onClick={handleReturnToPoll}
+                className="w-full bg-transparent hover:bg-gray-700 text-gray-300 font-bold py-2 px-4 rounded-lg"
               >
-                Cancel
+                Return to Poll
               </button>
             </div>
           </div>
@@ -423,26 +538,44 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                       </button>
                     </li>
                   ))}
-                  {featuredMovieDetails && (
-                    <li className="flex items-center gap-3 border-2 border-green-500 p-2 rounded-lg">
-                      <img
-                        src={featuredMovieDetails.imageUrl}
-                        alt={featuredMovieDetails.title}
-                        className="w-12 h-18 object-cover rounded"
-                      />
+                  {party.party_state?.status === "intermission" ? (
+                    <li className="flex items-center gap-3 border-2 border-yellow-500 p-2 rounded-lg">
+                      <Timer size={48} className="text-yellow-400" />
                       <div>
-                        <p className="font-bold text-white">
-                          {featuredMovieDetails.title} (
-                          {featuredMovieDetails.year})
-                        </p>
-                        <p className="text-xs text-gray-400 mb-1">
-                          {featuredMovieDetails.runtime} min
-                        </p>
-                        <p className="text-sm font-bold text-green-400">
-                          Now Playing
+                        <p className="font-bold text-white">Intermission</p>
+                        <p className="text-2xl font-bold text-yellow-400">
+                          {formatTimer(intermissionTime)}
                         </p>
                       </div>
                     </li>
+                  ) : (
+                    nowPlayingMovieDetails && (
+                      <li className="flex items-center gap-3 border-2 border-green-500 p-2 rounded-lg">
+                        <img
+                          src={nowPlayingMovieDetails.imageUrl}
+                          alt={nowPlayingMovieDetails.title}
+                          className="w-12 h-18 object-cover rounded"
+                        />
+                        <div>
+                          <p className="font-bold text-white">
+                            {nowPlayingMovieDetails.title} (
+                            {nowPlayingMovieDetails.year})
+                          </p>
+                          <p className="text-xs text-gray-400 mb-1">
+                            {nowPlayingMovieDetails.runtime} min
+                          </p>
+                          {party.party_state?.status === "playing" ? (
+                            <p className="text-sm font-bold text-green-400">
+                              Now Playing
+                            </p>
+                          ) : (
+                            <p className="text-sm font-bold text-yellow-400">
+                              Paused
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    )
                   )}
                   {upNextMovie && (
                     <li className="flex items-center gap-3 border-2 border-dashed border-blue-500 p-2 rounded-lg">
@@ -477,10 +610,23 @@ const ConductorDashboard = ({ partyId, onBack }) => {
               <div className="bg-gray-900 p-4 rounded-lg">
                 <h3 className="font-bold text-white mb-4">Party Controls</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <button className="bg-green-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-green-700">
-                    <Play size={24} />
-                    <span>Start Show</span>
-                  </button>
+                  {party.party_state?.status === "playing" ? (
+                    <button
+                      onClick={handlePause}
+                      className="bg-yellow-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-yellow-700"
+                    >
+                      <Pause size={24} />
+                      <span>Pause</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handlePlay}
+                      className="bg-green-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-green-700"
+                    >
+                      <Play size={24} />
+                      <span>Play</span>
+                    </button>
+                  )}
                   <button
                     onClick={handleCrashParty}
                     className="bg-red-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-red-700"
@@ -515,12 +661,6 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     </button>
                   </div>
                 </div>
-                {intermissionTime > 0 && (
-                  <div className="mt-4 text-center bg-yellow-500/20 text-yellow-300 p-3 rounded-lg flex items-center justify-center gap-2">
-                    <Timer size={20} /> Intermission ends in:{" "}
-                    {formatTimer(intermissionTime)}
-                  </div>
-                )}
               </div>
               <div className="bg-gray-900 p-4 rounded-lg">
                 <h3 className="font-bold text-white mb-4">Movie Controls</h3>
@@ -598,9 +738,17 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                           {movie.title} ({movie.year})
                         </span>
                       </div>
-                      <span className="font-bold text-white">
-                        {movie.votes || 0} Votes
-                      </span>
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-white">
+                          {movie.votes || 0} Votes
+                        </span>
+                        <button
+                          onClick={() => handleRemoveFromPoll(movie.id)}
+                          className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
