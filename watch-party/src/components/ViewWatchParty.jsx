@@ -53,13 +53,12 @@ const searchTMDb = async (query) => {
     );
     if (!response.ok) throw new Error("Failed to fetch from TMDB");
     const data = await response.json();
-    // **FIXED**: Changed `data.release_date` to `movie.release_date` and `data.poster_path` to `movie.poster_path`
     return data.results.slice(0, 5).map((movie) => ({
       id: movie.id,
       title: movie.title,
       year: movie.release_date ? movie.release_date.split("-")[0] : "N/A",
       imageUrl: movie.poster_path
-        ? `${tmdbImageUrl}${movie.poster_path}`
+        ? `${tmdbImageUrl}${data.poster_path}`
         : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
     }));
   } catch (error) {
@@ -284,13 +283,11 @@ const ViewWatchParty = ({ partyId, onBack }) => {
       setTimeout(() => setError(""), 3000);
       return;
     }
-    const { error } = await supabase
-      .from("votes")
-      .insert({
-        party_id: partyId,
-        user_id: user.id,
-        movie_tmdb_id: movieTmdbId,
-      });
+    const { error } = await supabase.from("votes").insert({
+      party_id: partyId,
+      user_id: user.id,
+      movie_tmdb_id: movieTmdbId,
+    });
     if (error) {
       setError("Could not cast vote. Please try again.");
       setTimeout(() => setError(""), 3000);
@@ -308,7 +305,6 @@ const ViewWatchParty = ({ partyId, onBack }) => {
       setError("Could not remove vote. Please try again.");
       setTimeout(() => setError(""), 3000);
     } else {
-      // **FIXED**: Optimistically update state after successful deletion.
       setUserVotes((prev) =>
         prev.filter((v) => v.voteId !== voteToRemove.voteId)
       );
@@ -345,7 +341,6 @@ const ViewWatchParty = ({ partyId, onBack }) => {
       setError("Could not remove suggestion.");
       setTimeout(() => setError(""), 3000);
     } else {
-      // **FIXED**: Optimistically update state after successful deletion.
       setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
       setUserSuggestionCount((prev) => prev - 1);
     }
@@ -378,6 +373,18 @@ const ViewWatchParty = ({ partyId, onBack }) => {
         >
           <ArrowLeft size={20} /> Back to Hub
         </button>
+
+        <div className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-white">
+            {party.party_name}
+          </h1>
+          <p className="text-lg text-gray-400 pt-2">
+            Conducted by{" "}
+            <span className="font-semibold text-indigo-400">
+              {party.conductor_username}
+            </span>
+          </p>
+        </div>
 
         <div className="bg-gray-800 rounded-xl shadow-lg p-8">
           <div className="grid md:grid-cols-3 gap-8">

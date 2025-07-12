@@ -32,12 +32,20 @@ export default function Hero({ setActiveLink }) {
             together with friends.
           </p>
           {/* This button now changes the active page to 'Create Party' */}
-          <button
-            onClick={() => setActiveLink("Create Party")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-indigo-600/40"
-          >
-            Create a Watch Party
-          </button>
+          <div className="flex flex-col items-center gap-10">
+            <button
+              onClick={() => setActiveLink("Create Party")}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold w-1xl h-16 py-3 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-indigo-600/40"
+            >
+              Create a Watch Party
+            </button>
+            <button
+              onClick={() => setActiveLink("Conductors")}
+              className="bg-transparent hover:bg-indigo-700 text-white font-bold border-4 border-indigo-600 w-1xl h-16 py-3 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-indigo-600/40"
+            >
+              Join a Watch Party
+            </button>
+          </div>
         </div>
       </section>
     </div>

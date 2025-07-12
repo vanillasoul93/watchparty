@@ -115,7 +115,6 @@ const AppContent = () => {
             <Hero setActiveLink={setCurrentPage} />
             <HowItWorks />
             <FeaturedMovies />
-            <Testimonials />
           </main>
         );
     }
