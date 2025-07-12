@@ -15,6 +15,7 @@ import {
   PauseCircle,
   SkipForward,
   Timer,
+  Trash2,
 } from "lucide-react";
 
 // --- TMDB API Helper ---
@@ -51,7 +52,9 @@ const PartyCard = ({
   currentUser,
   onCrashParty,
   onReopenParty,
+  onDeleteParty,
   onSelectDashboard,
+  onJoinParty,
 }) => {
   const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
   const [upNextDetails, setUpNextDetails] = useState(null);
@@ -92,11 +95,11 @@ const PartyCard = ({
 
   useEffect(() => {
     if (intermissionTime > 0) {
-      const timer = setTimeout(
+      const timerId = setTimeout(
         () => setIntermissionTime(intermissionTime - 1),
         1000
       );
-      return () => clearTimeout(timer);
+      return () => clearTimeout(timerId);
     }
   }, [intermissionTime]);
 
@@ -163,40 +166,30 @@ const PartyCard = ({
               <span className="font-semibold">Voting is Open!</span>
             </div>
           )}
+          <div
+            className={`flex items-center gap-3 p-2 rounded-md ${
+              isPlaying
+                ? "bg-green-500/20 text-green-300"
+                : isPaused || isIntermission
+                ? "bg-yellow-500/20 text-yellow-300"
+                : ""
+            }`}
+          >
+            {isPlaying && <PlayCircle size={18} className="text-green-400" />}
+            {isPaused && <PauseCircle size={18} className="text-yellow-400" />}
+            {isIntermission && <Timer size={18} className="text-yellow-400" />}
+            {!isPlaying && !isPaused && !isIntermission && (
+              <Film size={18} className="text-indigo-400" />
+            )}
 
-          {isIntermission ? (
-            <div className="flex items-center gap-3 p-2 rounded-md bg-yellow-500/20 text-yellow-300">
-              <Timer size={18} />
-              <span>Intermission: {formatTimer(intermissionTime)}</span>
-            </div>
-          ) : (
-            <div
-              className={`flex items-center gap-3 p-2 rounded-md ${
-                isPlaying
-                  ? "bg-green-500/20 text-green-300"
-                  : isPaused
-                  ? "bg-yellow-500/20 text-yellow-300"
-                  : ""
-              }`}
-            >
-              {isPlaying && <PlayCircle size={18} className="text-green-400" />}
-              {isPaused && (
-                <PauseCircle size={18} className="text-yellow-400" />
-              )}
-              {!isPlaying && !isPaused && (
-                <Film size={18} className="text-indigo-400" />
-              )}
-
-              <span>
-                {isPaused ? "Paused: " : "Now Playing: "}
-                <span className="font-semibold text-white ml-1">
-                  {nowPlayingDetails?.title || "N/A"} (
-                  {nowPlayingDetails?.year || "..."})
-                </span>
+            <span>
+              {isPaused ? "Paused: " : "Now Playing: "}
+              <span className="font-semibold text-white ml-1">
+                {nowPlayingDetails?.title || "N/A"} (
+                {nowPlayingDetails?.year || "..."})
               </span>
-            </div>
-          )}
-
+            </span>
+          </div>
           {upNextDetails && (
             <div className="flex items-center gap-3 bg-purple-500/20 text-purple-300 px-3 py-1 rounded-md">
               <SkipForward size={18} />
@@ -238,18 +231,32 @@ const PartyCard = ({
                 </button>
               </div>
             ) : (
-              <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300">
+              <button
+                onClick={() => onJoinParty(party.id)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300"
+              >
                 Join Party
               </button>
             )
-          ) : canReopen ? (
-            <button
-              onClick={() => onReopenParty(party.id)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <RefreshCw size={18} />
-              Re-Open Party
-            </button>
+          ) : isConductor ? (
+            <div className="flex items-center gap-2">
+              {canReopen && (
+                <button
+                  onClick={() => onReopenParty(party.id)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  <RefreshCw size={18} />
+                  Re-Open
+                </button>
+              )}
+              <button
+                onClick={() => onDeleteParty(party.id)}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <Trash2 size={18} />
+                Delete
+              </button>
+            </div>
           ) : (
             <button className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2">
               <Star size={18} />
@@ -268,6 +275,7 @@ const ConductorsPage = ({
   loading,
   error,
   onSelectDashboard,
+  onJoinParty,
   refreshParties,
 }) => {
   const { user } = useAuth();
@@ -293,6 +301,19 @@ const ConductorsPage = ({
 
     if (error) {
       console.error("Could not re-open the party:", error);
+    } else {
+      refreshParties();
+    }
+  };
+
+  const handleDeleteParty = async (partyId) => {
+    const { error } = await supabase
+      .from("watch_parties")
+      .delete()
+      .eq("id", partyId);
+
+    if (error) {
+      console.error("Could not delete the party:", error);
     } else {
       refreshParties();
     }
@@ -328,7 +349,9 @@ const ConductorsPage = ({
                   currentUser={user}
                   onCrashParty={handleCrashParty}
                   onReopenParty={handleReopenParty}
+                  onDeleteParty={handleDeleteParty}
                   onSelectDashboard={onSelectDashboard}
+                  onJoinParty={onJoinParty}
                 />
               ))}
             </div>
@@ -352,7 +375,9 @@ const ConductorsPage = ({
                   currentUser={user}
                   onCrashParty={handleCrashParty}
                   onReopenParty={handleReopenParty}
+                  onDeleteParty={handleDeleteParty}
                   onSelectDashboard={onSelectDashboard}
+                  onJoinParty={onJoinParty}
                 />
               ))}
             </div>

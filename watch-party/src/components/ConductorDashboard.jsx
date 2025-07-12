@@ -151,6 +151,28 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   const [isAddingToPoll, setIsAddingToPoll] = useState(false);
   const [showZeroVotesDialog, setShowZeroVotesDialog] = useState(false);
   const [showCrashConfirmation, setShowCrashConfirmation] = useState(false);
+  const [pollVoteCounts, setPollVoteCounts] = useState({});
+
+  const refreshVoteCounts = async () => {
+    if (!partyId) return;
+    const { data: allVotesData, error: votesError } = await supabase
+      .from("votes")
+      .select("movie_tmdb_id")
+      .eq("party_id", partyId);
+
+    if (votesError) {
+      console.error("Error fetching votes:", votesError);
+      return;
+    }
+
+    const counts = allVotesData
+      ? allVotesData.reduce((acc, vote) => {
+          acc[vote.movie_tmdb_id] = (acc[vote.movie_tmdb_id] || 0) + 1;
+          return acc;
+        }, {})
+      : {};
+    setPollVoteCounts(counts);
+  };
 
   useEffect(() => {
     const fetchPartyDetails = async () => {
@@ -170,6 +192,28 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       setLoading(false);
     };
     fetchPartyDetails();
+
+    refreshVoteCounts();
+
+    const channel = supabase
+      .channel(`dashboard-votes-${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "votes",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          refreshVoteCounts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [partyId]);
 
   useEffect(() => {
@@ -229,8 +273,13 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         1000
       );
       return () => clearTimeout(timer);
+    } else if (
+      intermissionTime === 0 &&
+      party?.party_state?.status === "intermission"
+    ) {
+      updatePartyStatus({ party_state: { status: "paused" } });
     }
-  }, [intermissionTime, party?.party_state?.status]);
+  }, [intermissionTime]);
 
   const updatePartyStatus = async (updates) => {
     const { error } = await supabase
@@ -252,26 +301,41 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     }
   };
 
-  const handleOpenPoll = () => updatePartyStatus({ voting_open: true });
+  const handleOpenPoll = async () => {
+    await supabase.from("votes").delete().eq("party_id", partyId);
+    setPollVoteCounts({});
+    updatePartyStatus({ voting_open: true });
+  };
 
   const handleClosePoll = () => {
     if (!party.poll_movies || party.poll_movies.length === 0) return;
-    const totalVotes = party.poll_movies.reduce(
-      (sum, movie) => sum + (movie.votes || 0),
+    const totalVotes = Object.values(pollVoteCounts).reduce(
+      (sum, count) => sum + count,
       0
     );
+
     if (totalVotes === 0) {
       setShowZeroVotesDialog(true);
       return;
     }
-    const winner = party.poll_movies.reduce((prev, current) =>
-      (prev.votes || 0) > (current.votes || 0) ? prev : current
-    );
-    setUpNextMovie(winner);
-    updatePartyStatus({
-      voting_open: false,
-      up_next_tmdb_id: winner.id,
-    });
+
+    let winnerId = null;
+    let maxVotes = -1;
+    for (const movieId in pollVoteCounts) {
+      if (pollVoteCounts[movieId] > maxVotes) {
+        maxVotes = pollVoteCounts[movieId];
+        winnerId = movieId;
+      }
+    }
+
+    const winner = party.poll_movies.find((movie) => movie.id == winnerId);
+    if (winner) {
+      setUpNextMovie(winner);
+      updatePartyStatus({
+        voting_open: false,
+        up_next_tmdb_id: winner.id,
+      });
+    }
   };
 
   const handleSelectRandom = () => {
@@ -349,12 +413,22 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       status: status,
     };
     const newWatchedList = [...(party.movies_watched || []), finishedMovie];
-    updatePartyStatus({
-      now_playing_tmdb_id: null,
-      movies_watched: newWatchedList,
-      voting_open: true,
-      party_state: { status: "paused" },
-    });
+
+    if (party.poll_movies.length > 0 || upNextMovie) {
+      updatePartyStatus({
+        now_playing_tmdb_id: null,
+        movies_watched: newWatchedList,
+        voting_open: true,
+        party_state: { status: "paused" },
+      });
+    } else {
+      updatePartyStatus({
+        now_playing_tmdb_id: null,
+        movies_watched: newWatchedList,
+        voting_open: false,
+        party_state: { status: "paused" },
+      });
+    }
   };
 
   const handleMarkAsWatched = () => handleFinishMovie("watched");
@@ -411,6 +485,13 @@ const ConductorDashboard = ({ partyId, onBack }) => {
 
   const formatTimer = (seconds) =>
     `${Math.floor(seconds / 60)}:${("0" + (seconds % 60)).slice(-2)}`;
+
+  // **FIXED**: Sort the poll movies by vote count in descending order before rendering.
+  const sortedPollMovies = [...(party?.poll_movies || [])].sort((a, b) => {
+    const votesA = pollVoteCounts[a.id] || 0;
+    const votesB = pollVoteCounts[b.id] || 0;
+    return votesB - votesA;
+  });
 
   return (
     <div className="bg-gray-900 min-h-screen pt-24 pb-12">
@@ -550,29 +631,47 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     </li>
                   ) : (
                     nowPlayingMovieDetails && (
-                      <li className="flex items-center gap-3 border-2 border-green-500 p-2 rounded-lg">
-                        <img
-                          src={nowPlayingMovieDetails.imageUrl}
-                          alt={nowPlayingMovieDetails.title}
-                          className="w-12 h-18 object-cover rounded"
-                        />
-                        <div>
-                          <p className="font-bold text-white">
-                            {nowPlayingMovieDetails.title} (
-                            {nowPlayingMovieDetails.year})
-                          </p>
-                          <p className="text-xs text-gray-400 mb-1">
-                            {nowPlayingMovieDetails.runtime} min
-                          </p>
-                          {party.party_state?.status === "playing" ? (
-                            <p className="text-sm font-bold text-green-400">
-                              Now Playing
+                      <li className="flex items-center justify-between gap-3 border-2 border-green-500 p-2 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={nowPlayingMovieDetails.imageUrl}
+                            alt={nowPlayingMovieDetails.title}
+                            className="w-12 h-18 object-cover rounded"
+                          />
+                          <div>
+                            <p className="font-bold text-white">
+                              {nowPlayingMovieDetails.title} (
+                              {nowPlayingMovieDetails.year})
                             </p>
-                          ) : (
-                            <p className="text-sm font-bold text-yellow-400">
-                              Paused
+                            <p className="text-xs text-gray-400 mb-1">
+                              {nowPlayingMovieDetails.runtime} min
                             </p>
-                          )}
+                            {party.party_state?.status === "playing" ? (
+                              <p className="text-sm font-bold text-green-400">
+                                Now Playing
+                              </p>
+                            ) : (
+                              <p className="text-sm font-bold text-yellow-400">
+                                Paused
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={handleMarkAsWatched}
+                            className="p-2 bg-green-600 rounded-full text-white hover:bg-green-700"
+                            title="Mark as Watched"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            onClick={handleSkipMovie}
+                            className="p-2 bg-yellow-600 rounded-full text-white hover:bg-yellow-700"
+                            title="Skip Movie"
+                          >
+                            <SkipForward size={16} />
+                          </button>
                         </div>
                       </li>
                     )
@@ -608,38 +707,37 @@ const ConductorDashboard = ({ partyId, onBack }) => {
             </div>
             <div className="md:col-span-2 space-y-8">
               <div className="bg-gray-900 p-4 rounded-lg">
-                <h3 className="font-bold text-white mb-4">Party Controls</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {party.party_state?.status === "playing" ? (
-                    <button
-                      onClick={handlePause}
-                      className="bg-yellow-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-yellow-700"
-                    >
-                      <Pause size={24} />
-                      <span>Pause</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handlePlay}
-                      className="bg-green-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-green-700"
-                    >
-                      <Play size={24} />
-                      <span>Play</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={handleCrashParty}
-                    className="bg-red-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-red-700"
-                  >
-                    <XCircle size={24} />
-                    <span>Crash Party</span>
-                  </button>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-700">
-                  <h4 className="font-semibold text-white mb-2">
-                    Intermission
-                  </h4>
+                <h3 className="font-bold text-white mb-4">
+                  Dashboard Controls
+                </h3>
+                <div className="space-y-4">
                   <div className="flex items-center gap-2">
+                    {party.party_state?.status === "playing" ? (
+                      <button
+                        onClick={handlePause}
+                        className="w-full bg-yellow-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-700"
+                      >
+                        <Pause size={20} />
+                        <span>Pause</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePlay}
+                        className="w-full bg-green-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700"
+                      >
+                        <Play size={20} />
+                        <span>Play</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={handleCrashParty}
+                      className="w-full bg-red-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-red-700"
+                    >
+                      <XCircle size={20} />
+                      <span>Crash Party</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 pt-4 border-t border-gray-700">
                     <input
                       type="number"
                       value={customIntermissionMinutes}
@@ -649,36 +747,17 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                       className="bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 w-20 text-center"
                       min="1"
                     />
-                    <span className="text-gray-400">minutes</span>
+                    <span className="text-gray-400">min</span>
                     <button
                       onClick={() =>
                         handleStartIntermission(customIntermissionMinutes)
                       }
-                      className="bg-yellow-600 p-2 rounded-lg flex-grow flex items-center justify-center hover:bg-yellow-700"
+                      className="bg-gray-600 p-2 rounded-lg flex-grow flex items-center justify-center hover:bg-gray-700"
                     >
-                      <Pause size={20} />
+                      <Timer size={20} />
                       <span className="ml-2">Set Intermission</span>
                     </button>
                   </div>
-                </div>
-              </div>
-              <div className="bg-gray-900 p-4 rounded-lg">
-                <h3 className="font-bold text-white mb-4">Movie Controls</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={handleMarkAsWatched}
-                    className="bg-gray-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-gray-700"
-                  >
-                    <Check size={24} />
-                    <span>Mark Watched</span>
-                  </button>
-                  <button
-                    onClick={handleSkipMovie}
-                    className="bg-gray-600 p-3 rounded-lg flex flex-col items-center justify-center hover:bg-gray-700"
-                  >
-                    <SkipForward size={24} />
-                    <span>Skip Movie</span>
-                  </button>
                 </div>
               </div>
               <div className="bg-gray-900 p-4 rounded-lg">
@@ -705,7 +784,10 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     ) : (
                       <button
                         onClick={handleOpenPoll}
-                        className="bg-blue-600 px-3 py-1 rounded-md text-sm font-semibold"
+                        disabled={
+                          !party.poll_movies || party.poll_movies.length === 0
+                        }
+                        className="bg-blue-600 px-3 py-1 rounded-md text-sm font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed"
                       >
                         Open Poll
                       </button>
@@ -717,48 +799,57 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     Voting is now open for viewers!
                   </p>
                 )}
-                <ul className="space-y-2">
-                  {party.poll_movies?.map((movie) => (
-                    <li
-                      key={movie.id}
-                      className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={movie.imageUrl}
-                          alt={movie.title}
-                          className="w-10 h-16 object-cover rounded"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src =
-                              "https://placehold.co/40x60/1a202c/ffffff?text=Err";
-                          }}
-                        />
-                        <span className="text-gray-300">
-                          {movie.title} ({movie.year})
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-bold text-white">
-                          {movie.votes || 0} Votes
-                        </span>
-                        <button
-                          onClick={() => handleRemoveFromPoll(movie.id)}
-                          className="p-1 text-gray-500 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {isAddingToPoll && (
+
+                {party.poll_movies?.length === 0 && !isAddingToPoll ? (
+                  <p className="text-gray-400 text-center py-4">
+                    The movie poll is empty.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {sortedPollMovies.map((movie) => (
+                      <li
+                        key={movie.id}
+                        className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={movie.imageUrl}
+                            alt={movie.title}
+                            className="w-10 h-16 object-cover rounded"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://placehold.co/40x60/1a202c/ffffff?text=Err";
+                            }}
+                          />
+                          <span className="text-gray-300">
+                            {movie.title} ({movie.year})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className="font-bold text-white">
+                            {pollVoteCounts[movie.id] || 0} Votes
+                          </span>
+                          <button
+                            onClick={() => handleRemoveFromPoll(movie.id)}
+                            className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {(isAddingToPoll ||
+                  (party.poll_movies?.length === 0 && !party.voting_open)) && (
                   <div className="mt-4">
                     <MovieSearchInput
                       onSelect={handleAddMovieToPoll}
                       existingIds={[
                         ...party.poll_movies.map((m) => m.id),
-                        party.featured_movie_tmdb_id,
+                        party.now_playing_tmdb_id,
                       ]}
                     />
                   </div>

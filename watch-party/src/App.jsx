@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./contexts/Auth";
-import { supabase } from "./supabaseClient"; // Import supabase client
+import { supabase } from "./supabaseClient";
 
-// Import all necessary components
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import HowItWorks from "./components/HowItWorks";
@@ -15,14 +14,15 @@ import SignUp from "./components/Auth/SignUp";
 import ConductorsPage from "./components/ConductorsPage";
 import ProfilePage from "./components/ProfilePage";
 import ConductorDashboard from "./components/ConductorDashboard";
+import ViewWatchParty from "./components/ViewWatchParty"; // Import the new viewer page
 
 const AppContent = () => {
   const { user } = useAuth();
   const [currentPage, setCurrentPage] = useState("Home");
   const [authView, setAuthView] = useState("login");
-  const [viewingPartyId, setViewingPartyId] = useState(null);
+  const [dashboardPartyId, setDashboardPartyId] = useState(null);
+  const [viewingPartyId, setViewingPartyId] = useState(null); // State for the viewer page
 
-  // --- State and Logic Lifted Up from ConductorsPage ---
   const [activeParties, setActiveParties] = useState([]);
   const [concludedParties, setConcludedParties] = useState([]);
   const [loadingParties, setLoadingParties] = useState(true);
@@ -36,40 +36,48 @@ const AppContent = () => {
       .select("*")
       .eq("is_public", true)
       .order("created_at", { ascending: false });
-
     if (error) {
       console.error("Error fetching parties:", error);
       setPartyError(error.message);
     } else {
-      const active = data.filter((p) => p.status === "active");
-      const concluded = data
-        .filter((p) => p.status === "concluded")
-        .slice(0, 10);
-      setActiveParties(active);
-      setConcludedParties(concluded);
+      setActiveParties(data.filter((p) => p.status === "active"));
+      setConcludedParties(
+        data.filter((p) => p.status === "concluded").slice(0, 10)
+      );
     }
     setLoadingParties(false);
   };
 
-  // Fetch parties when the Conductors page is selected
   useEffect(() => {
     if (currentPage === "Conductors") {
       fetchParties();
     }
   }, [currentPage]);
 
-  // When returning from the dashboard, refresh the party list
   const handleReturnFromDashboard = () => {
-    setViewingPartyId(null);
-    fetchParties(); // Re-fetch data to ensure it's up-to-date
+    setDashboardPartyId(null);
+    fetchParties();
   };
 
-  // If a party dashboard is being viewed, render it exclusively
-  if (viewingPartyId) {
+  const handleReturnFromViewer = () => {
+    setViewingPartyId(null);
+    fetchParties();
+  };
+
+  if (dashboardPartyId) {
     return (
       <ConductorDashboard
-        partyId={viewingPartyId}
+        partyId={dashboardPartyId}
         onBack={handleReturnFromDashboard}
+      />
+    );
+  }
+
+  if (viewingPartyId) {
+    return (
+      <ViewWatchParty
+        partyId={viewingPartyId}
+        onBack={handleReturnFromViewer}
       />
     );
   }
@@ -87,14 +95,14 @@ const AppContent = () => {
       case "Create Party":
         return <CreateWatchParty />;
       case "Conductors":
-        // Pass the fetched data and the fetch function down as props
         return (
           <ConductorsPage
             activeParties={activeParties}
             concludedParties={concludedParties}
             loading={loadingParties}
             error={partyError}
-            onSelectDashboard={setViewingPartyId}
+            onSelectDashboard={setDashboardPartyId}
+            onJoinParty={setViewingPartyId} // Pass join function
             refreshParties={fetchParties}
           />
         );
