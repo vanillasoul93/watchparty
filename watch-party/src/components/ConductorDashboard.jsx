@@ -320,36 +320,24 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     updatePartyStatus({ voting_open: true });
   };
 
-  // **FIXED**: Rewrote the winner selection logic to be more robust.
   const handleClosePoll = () => {
     if (!party.poll_movies || party.poll_movies.length === 0) return;
-
-    const moviesWithVotes = party.poll_movies.map((movie) => ({
-      ...movie,
-      votes: pollVoteCounts[movie.id] || 0,
-    }));
-
-    const totalVotes = moviesWithVotes.reduce(
-      (sum, movie) => sum + movie.votes,
+    const totalVotes = Object.values(pollVoteCounts).reduce(
+      (sum, count) => sum + count,
       0
     );
-
     if (totalVotes === 0) {
       setShowZeroVotesDialog(true);
       return;
     }
-
-    const winner = moviesWithVotes.reduce((prev, current) =>
-      prev.votes > current.votes ? prev : current
+    const winner = party.poll_movies.reduce((prev, current) =>
+      (prev.votes || 0) > (current.votes || 0) ? prev : current
     );
-
-    if (winner) {
-      setUpNextMovie(winner);
-      updatePartyStatus({
-        voting_open: false,
-        up_next_tmdb_id: winner.id,
-      });
-    }
+    setUpNextMovie(winner);
+    updatePartyStatus({
+      voting_open: false,
+      up_next_tmdb_id: winner.id,
+    });
   };
 
   const handleSelectRandom = () => {
@@ -704,7 +692,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                           </button>
                           <button
                             onClick={handleSkipMovie}
-                            className="p-2 bg-yellow-600 rounded-full text-white hover:bg-yellow-700"
+                            className="p-2 bg-indigo-500 rounded-full text-white hover:bg-indigo-900"
                             title="Skip Movie"
                           >
                             <SkipForward size={16} />
@@ -743,60 +731,79 @@ const ConductorDashboard = ({ partyId, onBack }) => {
               </div>
             </div>
             <div className="md:col-span-2 space-y-8">
-              <div className="bg-gray-900 p-4 rounded-lg">
+              <div className="bg-gray-900 p-6 rounded-lg">
                 <h3 className="font-bold text-white mb-4">
                   Dashboard Controls
                 </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    {party.party_state?.status === "playing" ? (
-                      <button
-                        onClick={handlePause}
-                        disabled={party.voting_open}
-                        className="w-full bg-yellow-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Pause size={20} />
-                        <span>Pause</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handlePlay}
-                        disabled={party.voting_open}
-                        className="w-full bg-green-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Play size={20} />
-                        <span>Play</span>
-                      </button>
-                    )}
+                <div className="grid grid-cols-2 gap-4">
+                  {party.party_state?.status === "playing" ? (
                     <button
-                      onClick={handleCrashParty}
-                      className="w-full bg-red-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-red-700"
+                      onClick={handlePause}
+                      disabled={party.voting_open}
+                      className="bg-gray-700 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-900 text-yellow-400 text-1xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <XCircle size={20} />
-                      <span>Crash Party</span>
+                      <Pause size={26} />
+                      <span>Pause</span>
                     </button>
-                  </div>
-                  <div className="flex items-center gap-2 pt-4 border-t border-gray-700">
+                  ) : (
+                    <button
+                      onClick={handlePlay}
+                      disabled={party.voting_open}
+                      className="w-full bg-gray-700 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-900 text-green-400 text-1xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Play size={26} />
+                      <span>Play</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleMarkAsWatched}
+                    disabled={!nowPlayingMovieDetails}
+                    className="bg-gray-700 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-900 text-green-400 text-1xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Check size={26} />
+                    <span>Mark Watched</span>
+                  </button>
+                  <button
+                    onClick={handleSkipMovie}
+                    disabled={!nowPlayingMovieDetails}
+                    className="bg-gray-700 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-900 text-indigo-400 text-1xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <SkipForward size={26} />
+                    <span>Skip Movie</span>
+                  </button>
+                  <button
+                    onClick={handleCrashParty}
+                    className="bg-gray-700 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-red-900 text-red-400 text-1xl font-semibold"
+                  >
+                    <XCircle size={26} />
+                    <span>Crash Party</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 pt-4 mt-4 border-t border-gray-700">
+                  <div>
                     <input
                       type="number"
                       value={customIntermissionMinutes}
                       onChange={(e) =>
                         setCustomIntermissionMinutes(e.target.value)
                       }
-                      className="bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 w-20 text-center"
+                      className="bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 w-1xl text-center"
                       min="1"
                     />
-                    <span className="text-gray-400">min</span>
-                    <button
-                      onClick={() =>
-                        handleStartIntermission(customIntermissionMinutes)
-                      }
-                      className="bg-gray-600 p-2 rounded-lg flex-grow flex items-center justify-center hover:bg-gray-700"
-                    >
-                      <Timer size={20} />
-                      <span className="ml-2">Set Intermission</span>
-                    </button>
+                    <span className="text-gray-400 px-5 text-1xl font-semibold">
+                      minute(s)
+                    </span>
                   </div>
+
+                  <button
+                    onClick={() =>
+                      handleStartIntermission(customIntermissionMinutes)
+                    }
+                    className="bg-gray-700 p-2 rounded-lg flex-grow flex items-center justify-center w-1xl text-amber-400 text-1xl font-semibold hover:bg-amber-900"
+                  >
+                    <Timer size={20} />
+                    <span className="ml-2">Set Intermission</span>
+                  </button>
                 </div>
               </div>
               <div className="bg-gray-900 p-4 rounded-lg">
@@ -804,13 +811,13 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                   <h3 className="font-bold text-white flex items-center gap-2">
                     <Vote size={20} /> Movie Poll
                   </h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ">
                     {!party.voting_open && party.poll_movies?.length < 10 && (
                       <button
                         onClick={() => setIsAddingToPoll(true)}
-                        className="bg-gray-600 p-2 rounded-md text-sm font-semibold hover:bg-gray-700"
+                        className="bg-gray-600 p-1 rounded-md text-1xl font-semibold hover:bg-green-900 text-green-400"
                       >
-                        <PlusCircle size={16} />
+                        <PlusCircle size={24} className="" />
                       </button>
                     )}
                     {party.voting_open ? (
@@ -826,7 +833,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                         disabled={
                           !party.poll_movies || party.poll_movies.length === 0
                         }
-                        className="bg-blue-600 px-3 py-1 rounded-md text-sm font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed"
+                        className="bg-gray-600 px-3 py-1 rounded-md text-1xl font-semibold text-indigo-400 hover:bg-indigo-900 disabled:bg-gray-900 disabled:cursor-not-allowed"
                       >
                         Open Poll
                       </button>
