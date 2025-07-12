@@ -152,19 +152,14 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   const [showZeroVotesDialog, setShowZeroVotesDialog] = useState(false);
   const [showCrashConfirmation, setShowCrashConfirmation] = useState(false);
   const [pollVoteCounts, setPollVoteCounts] = useState({});
+  const [suggestions, setSuggestions] = useState([]);
 
   const refreshVoteCounts = async () => {
     if (!partyId) return;
-    const { data: allVotesData, error: votesError } = await supabase
+    const { data: allVotesData } = await supabase
       .from("votes")
       .select("movie_tmdb_id")
       .eq("party_id", partyId);
-
-    if (votesError) {
-      console.error("Error fetching votes:", votesError);
-      return;
-    }
-
     const counts = allVotesData
       ? allVotesData.reduce((acc, vote) => {
           acc[vote.movie_tmdb_id] = (acc[vote.movie_tmdb_id] || 0) + 1;
@@ -172,6 +167,15 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         }, {})
       : {};
     setPollVoteCounts(counts);
+  };
+
+  const refreshSuggestionData = async () => {
+    if (!partyId) return;
+    const { data } = await supabase
+      .from("suggestions")
+      .select("*")
+      .eq("party_id", partyId);
+    if (data) setSuggestions(data);
   };
 
   useEffect(() => {
@@ -185,17 +189,16 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         .single();
       if (error) {
         setError("Failed to load party details.");
-        console.error(error);
       } else {
         setParty(data);
       }
       setLoading(false);
     };
     fetchPartyDetails();
-
     refreshVoteCounts();
+    refreshSuggestionData();
 
-    const channel = supabase
+    const votesChannel = supabase
       .channel(`dashboard-votes-${partyId}`)
       .on(
         "postgres_changes",
@@ -205,14 +208,26 @@ const ConductorDashboard = ({ partyId, onBack }) => {
           table: "votes",
           filter: `party_id=eq.${partyId}`,
         },
-        (payload) => {
-          refreshVoteCounts();
-        }
+        refreshVoteCounts
+      )
+      .subscribe();
+    const suggestionsChannel = supabase
+      .channel(`dashboard-suggestions-${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "suggestions",
+          filter: `party_id=eq.${partyId}`,
+        },
+        refreshSuggestionData
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(votesChannel);
+      supabase.removeChannel(suggestionsChannel);
     };
   }, [partyId]);
 
@@ -225,14 +240,12 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         } else {
           setNowPlayingMovieDetails(null);
         }
-
         if (party.up_next_tmdb_id) {
           const upNextDetails = await getMovieDetails(party.up_next_tmdb_id);
           setUpNextMovie(upNextDetails);
         } else {
           setUpNextMovie(null);
         }
-
         if (party.movies_watched && party.movies_watched.length > 0) {
           const movieDetailsPromises = party.movies_watched.map(
             async (watchedInfo) => {
@@ -307,10 +320,17 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     updatePartyStatus({ voting_open: true });
   };
 
+  // **FIXED**: Rewrote the winner selection logic to be more robust.
   const handleClosePoll = () => {
     if (!party.poll_movies || party.poll_movies.length === 0) return;
-    const totalVotes = Object.values(pollVoteCounts).reduce(
-      (sum, count) => sum + count,
+
+    const moviesWithVotes = party.poll_movies.map((movie) => ({
+      ...movie,
+      votes: pollVoteCounts[movie.id] || 0,
+    }));
+
+    const totalVotes = moviesWithVotes.reduce(
+      (sum, movie) => sum + movie.votes,
       0
     );
 
@@ -319,16 +339,10 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       return;
     }
 
-    let winnerId = null;
-    let maxVotes = -1;
-    for (const movieId in pollVoteCounts) {
-      if (pollVoteCounts[movieId] > maxVotes) {
-        maxVotes = pollVoteCounts[movieId];
-        winnerId = movieId;
-      }
-    }
+    const winner = moviesWithVotes.reduce((prev, current) =>
+      prev.votes > current.votes ? prev : current
+    );
 
-    const winner = party.poll_movies.find((movie) => movie.id == winnerId);
     if (winner) {
       setUpNextMovie(winner);
       updatePartyStatus({
@@ -476,6 +490,30 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     setShowCrashConfirmation(false);
   };
 
+  const handleMoveSuggestionToPoll = async (suggestion) => {
+    if (party.poll_movies.length >= 10) {
+      setError("The movie poll is full.");
+      setTimeout(() => setError(""), 3000);
+      return;
+    }
+    const movieToAdd = {
+      id: suggestion.movie_tmdb_id,
+      title: suggestion.movie_title,
+      year: suggestion.movie_year,
+      imageUrl: suggestion.movie_image_url,
+    };
+    const newPollMovies = [...party.poll_movies, movieToAdd];
+    await updatePartyStatus({ poll_movies: newPollMovies });
+
+    const { error } = await supabase
+      .from("suggestions")
+      .delete()
+      .eq("id", suggestion.id);
+    if (!error) {
+      setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
+    }
+  };
+
   if (loading)
     return (
       <div className="text-center text-white pt-40">Loading Dashboard...</div>
@@ -486,7 +524,6 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   const formatTimer = (seconds) =>
     `${Math.floor(seconds / 60)}:${("0" + (seconds % 60)).slice(-2)}`;
 
-  // **FIXED**: Sort the poll movies by vote count in descending order before rendering.
   const sortedPollMovies = [...(party?.poll_movies || [])].sort((a, b) => {
     const votesA = pollVoteCounts[a.id] || 0;
     const votesB = pollVoteCounts[b.id] || 0;
@@ -715,7 +752,8 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     {party.party_state?.status === "playing" ? (
                       <button
                         onClick={handlePause}
-                        className="w-full bg-yellow-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-700"
+                        disabled={party.voting_open}
+                        className="w-full bg-yellow-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Pause size={20} />
                         <span>Pause</span>
@@ -723,7 +761,8 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     ) : (
                       <button
                         onClick={handlePlay}
-                        className="w-full bg-green-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700"
+                        disabled={party.voting_open}
+                        className="w-full bg-green-600 p-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play size={20} />
                         <span>Play</span>
@@ -853,6 +892,42 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                       ]}
                     />
                   </div>
+                )}
+              </div>
+              <div className="bg-gray-900 p-4 rounded-lg">
+                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <PlusCircle size={20} /> Viewer Suggestions
+                </h3>
+                {suggestions.length > 0 ? (
+                  <ul className="space-y-2">
+                    {suggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id}
+                        className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={suggestion.movie_image_url}
+                            alt={suggestion.movie_title}
+                            className="w-10 h-16 object-cover rounded"
+                          />
+                          <span className="text-gray-300">
+                            {suggestion.movie_title} ({suggestion.movie_year})
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleMoveSuggestionToPoll(suggestion)}
+                          className="bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition hover:bg-green-700"
+                        >
+                          Add to Poll
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-400 text-center py-4">
+                    No suggestions from viewers yet.
+                  </p>
                 )}
               </div>
             </div>
