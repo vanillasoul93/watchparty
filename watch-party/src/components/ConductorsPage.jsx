@@ -218,22 +218,22 @@ const PartyCard = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onSelectDashboard(party.id)}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                  className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 h-10 "
                 >
                   <LayoutDashboard size={18} />
                   Dashboard
                 </button>
                 <button
                   onClick={() => onCrashParty(party.id)}
-                  className="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-bold p-3 rounded-lg transition-all duration-300"
+                  className="flex-shrink-0 bg-gray-700 hover:bg-red-900 text-red-400 text-center flex justify-center place-items-center font-bold p-1 rounded-lg transition-all duration-300 h-10 w-10 "
                 >
-                  <XCircle size={18} />
+                  <XCircle size={26} />
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => onJoinParty(party.id)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300"
+                className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg transition-all duration-300"
               >
                 Join Party
               </button>
@@ -243,7 +243,7 @@ const PartyCard = ({
               {canReopen && (
                 <button
                   onClick={() => onReopenParty(party.id)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                  className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
                 >
                   <RefreshCw size={18} />
                   Re-Open
@@ -251,14 +251,14 @@ const PartyCard = ({
               )}
               <button
                 onClick={() => onDeleteParty(party.id)}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                className="w-full bg-gray-700 hover:bg-red-900 text-red-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
               >
                 <Trash2 size={18} />
                 Delete
               </button>
             </div>
           ) : (
-            <button className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2">
+            <button className="w-full bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2">
               <Star size={18} />
               Review Party
             </button>

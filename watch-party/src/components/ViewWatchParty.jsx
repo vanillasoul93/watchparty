@@ -53,12 +53,13 @@ const searchTMDb = async (query) => {
     );
     if (!response.ok) throw new Error("Failed to fetch from TMDB");
     const data = await response.json();
+    // **FIXED**: Changed `data.poster_path` to `movie.poster_path` to correctly reference the individual movie object in the loop.
     return data.results.slice(0, 5).map((movie) => ({
       id: movie.id,
       title: movie.title,
       year: movie.release_date ? movie.release_date.split("-")[0] : "N/A",
       imageUrl: movie.poster_path
-        ? `${tmdbImageUrl}${data.poster_path}`
+        ? `${tmdbImageUrl}${movie.poster_path}`
         : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
     }));
   } catch (error) {
@@ -101,7 +102,7 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
         type="text"
         value={searchTerm}
         onChange={handleSearch}
-        className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
+        className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-gray-700 transition outline-0"
         placeholder="Search to suggest a movie..."
       />
       {loading && (
@@ -113,12 +114,12 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
             <li
               key={movie.id}
               onClick={() => handleSelectMovie(movie)}
-              className="px-4 py-2 text-white hover:bg-indigo-600 cursor-pointer flex items-center gap-4"
+              className="px-4 py-2 text-white hover:bg-indigo-900 cursor-pointer flex items-center gap-4"
             >
               <img
                 src={movie.imageUrl}
                 alt={movie.title}
-                className="w-10 h-16 object-cover rounded"
+                className="w-15 h-20 object-cover rounded"
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src =
@@ -500,28 +501,30 @@ const ViewWatchParty = ({ partyId, onBack }) => {
                           <img
                             src={movie.imageUrl}
                             alt={movie.title}
-                            className="w-10 h-16 object-cover rounded"
+                            className="w-15 h-22 object-cover rounded"
                           />
-                          <span className="text-gray-300">
-                            {movie.title} ({movie.year})
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-indigo-100 pl-1 text-lg font-semibold">
+                              {movie.title} ({movie.year})
+                            </span>
+                            <span className="text-indigo-100 pl-1 text-1xl font-bold">
+                              {pollVoteCounts[movie.id] || 0} Votes
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-bold text-white">
-                            {pollVoteCounts[movie.id] || 0} Votes
-                          </span>
                           {userVotes.some((v) => v.movieId === movie.id) && (
                             <button
                               onClick={() => handleRemoveVote(movie.id)}
-                              className="bg-red-600 text-white font-bold p-2 rounded-full transition hover:bg-red-700"
+                              className="bg-red-800 text-white font-bold p-2 rounded-lg transition hover:bg-red-900"
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={20} />
                             </button>
                           )}
                           <button
                             onClick={() => handleVote(movie.id)}
                             disabled={remainingVotes <= 0}
-                            className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                            className="bg-gray-900 text-green-400 font-bold py-2 px-4 rounded-lg transition hover:bg-green-900 disabled:bg-gray-600 disabled:cursor-not-allowed"
                           >
                             Vote
                           </button>
@@ -555,22 +558,25 @@ const ViewWatchParty = ({ partyId, onBack }) => {
                       key={suggestion.id}
                       className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1">
                         <img
                           src={suggestion.movie_image_url}
                           alt={suggestion.movie_title}
-                          className="w-10 h-16 object-cover rounded"
+                          className="w-15 h-22 object-cover rounded"
                         />
-                        <span className="text-gray-300">
-                          {suggestion.movie_title} ({suggestion.movie_year})
+                        <span className="text-indigo-100 pl-4 text-1xl font-semibold">
+                          {suggestion.movie_title}
+                        </span>
+                        <span className="text-indigo-100 pl-0.1 text-1xl font-semibold">
+                          ({suggestion.movie_year})
                         </span>
                       </div>
                       {suggestion.user_id === user.id && (
                         <button
                           onClick={() => handleRemoveSuggestion(suggestion.id)}
-                          className="p-2 text-gray-500 hover:text-red-500"
+                          className="p-1 text-gray-500 hover:text-red-400 text-2xl"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={24} />
                         </button>
                       )}
                     </li>

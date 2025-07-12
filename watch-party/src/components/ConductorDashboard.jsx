@@ -823,7 +823,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                     {party.voting_open ? (
                       <button
                         onClick={handleClosePoll}
-                        className="bg-red-600 px-3 py-1 rounded-md text-sm font-semibold"
+                        className="bg-gray-600 px-3 py-1 rounded-md text-1xl font-semibold hover:bg-red-900 text-red-400"
                       >
                         Close Poll
                       </button>
@@ -857,30 +857,32 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                         key={movie.id}
                         className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
                       >
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={movie.imageUrl}
-                            alt={movie.title}
-                            className="w-10 h-16 object-cover rounded"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src =
-                                "https://placehold.co/40x60/1a202c/ffffff?text=Err";
-                            }}
-                          />
-                          <span className="text-gray-300">
-                            {movie.title} ({movie.year})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold text-white">
-                            {pollVoteCounts[movie.id] || 0} Votes
-                          </span>
+                        <div className="flex items-center w-full justify justify-between">
+                          <div className="flex justify-between">
+                            <img
+                              src={movie.imageUrl}
+                              alt={movie.title}
+                              className="w-15 h-22 object-cover rounded"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src =
+                                  "https://placehold.co/40x60/1a202c/ffffff?text=Err";
+                              }}
+                            />
+                            <div className="flex flex-col w">
+                              <span className="text-indigo-100 pl-1 text-lg font-semibold">
+                                {movie.title} ({movie.year})
+                              </span>
+                              <span className="text-indigo-100 pl-1 text-1xl font-bold">
+                                {pollVoteCounts[movie.id] || 0} Votes
+                              </span>
+                            </div>
+                          </div>
                           <button
                             onClick={() => handleRemoveFromPoll(movie.id)}
-                            className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                            className="p-1 text-gray-500 hover:text-red-400 transition-colors"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={26} />
                           </button>
                         </div>
                       </li>
@@ -916,7 +918,7 @@ const ConductorDashboard = ({ partyId, onBack }) => {
                           <img
                             src={suggestion.movie_image_url}
                             alt={suggestion.movie_title}
-                            className="w-10 h-16 object-cover rounded"
+                            className="w-15 h-22 object-cover rounded"
                           />
                           <span className="text-gray-300">
                             {suggestion.movie_title} ({suggestion.movie_year})
