@@ -81,6 +81,7 @@ const ViewWatchParty = () => {
   const { partyId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userProfileRef = useRef();
 
   const [party, setParty] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -95,8 +96,27 @@ const ViewWatchParty = () => {
   const [userSuggestionCount, setUserSuggestionCount] = useState(0);
   const [movieToReview, setMovieToReview] = useState(null);
   const prevMoviesWatchedRef = useRef([]);
+  const prevVotingOpen = useRef(false);
   const [intermissionTime, setIntermissionTime] = useState(0);
-  const prevVotingOpen = useRef();
+  const [userProfile, setUserProfile] = useState(null);
+
+  // Fetch the user's profile to check their review prompt setting
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("prompt_for_reviews")
+        .eq("id", user.id)
+        .single();
+      setUserProfile(data);
+    };
+    fetchProfile();
+  }, [user]);
+
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
 
   const refreshVoteData = useCallback(async () => {
     if (!partyId || !user) return;
@@ -136,78 +156,6 @@ const ViewWatchParty = () => {
   }, [partyId, user]);
 
   useEffect(() => {
-    const currentVotingOpen = party?.voting_open;
-
-    // Check if the poll just opened (i.e., it was previously false and is now true)
-    if (currentVotingOpen && !prevVotingOpen.current) {
-      const resetUserVotes = async () => {
-        if (!user || !partyId) return;
-
-        // Delete all of the current user's votes for this party from the database
-        await supabase
-          .from("votes")
-          .delete()
-          .match({ user_id: user.id, party_id: partyId });
-
-        // After deleting, refresh the local vote state to update the UI
-        refreshVoteData();
-      };
-
-      resetUserVotes();
-    }
-
-    // Update the ref with the current value for the next render
-    prevVotingOpen.current = currentVotingOpen;
-  }, [party?.voting_open, partyId, user, refreshVoteData]);
-
-  // --- UPDATED useEffect for debugging Vote and Suggestion Subscriptions ---
-  useEffect(() => {
-    if (!partyId || !user) return;
-
-    // Dedicated channel for votes
-    const votesSubscription = supabase
-      .channel(`party-votes:${partyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "votes",
-          filter: `party_id=eq.${partyId}`,
-        },
-        (payload) => {
-          console.log("VIEWER SIDE: Vote change received!", payload);
-          refreshVoteData();
-        }
-      )
-      .subscribe();
-
-    // Dedicated channel for suggestions
-    const suggestionsSubscription = supabase
-      .channel(`party-suggestions:${partyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "suggestions",
-          filter: `party_id=eq.${partyId}`,
-        },
-        (payload) => {
-          console.log("VIEWER SIDE: Suggestion change received!", payload);
-          refreshSuggestionData();
-        }
-      )
-      .subscribe();
-
-    // Cleanup function to remove the subscriptions
-    return () => {
-      supabase.removeChannel(votesSubscription);
-      supabase.removeChannel(suggestionsSubscription);
-    };
-  }, [partyId, user, refreshVoteData, refreshSuggestionData]);
-
-  useEffect(() => {
     if (!partyId || !user) return;
 
     const fetchInitialData = async () => {
@@ -243,6 +191,26 @@ const ViewWatchParty = () => {
         },
         (payload) => setParty(payload.new)
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "votes",
+          filter: `party_id=eq.${partyId}`,
+        },
+        refreshVoteData
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "suggestions",
+          filter: `party_id=eq.${partyId}`,
+        },
+        refreshSuggestionData
+      )
       .on("presence", { event: "sync" }, () => {
         const presenceState = partyChannel.presenceState();
         const currentViewers = Object.values(presenceState)
@@ -253,8 +221,27 @@ const ViewWatchParty = () => {
         );
         setViewers(currentViewers);
       })
+      .on("broadcast", { event: "movie-finished" }, async ({ payload }) => {
+        console.log("VIEWER received broadcast:", payload); // For debugging
+        if (userProfileRef.current?.prompt_for_reviews) {
+          const movieDetails = await getMovieDetails(payload.movieId);
+          if (movieDetails) setMovieToReview(movieDetails);
+        }
+      })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
+          partyChannel.on(
+            "broadcast",
+            { event: "movie-finished" },
+            async (payload) => {
+              if (userProfile?.prompt_for_reviews) {
+                const movieDetails = await getMovieDetails(
+                  payload.payload.movieId
+                );
+                if (movieDetails) setMovieToReview(movieDetails);
+              }
+            }
+          );
           await partyChannel.track({
             user_id: user.id,
             username: user.user_metadata?.username || "Anonymous",
@@ -267,6 +254,22 @@ const ViewWatchParty = () => {
       supabase.removeChannel(partyChannel);
     };
   }, [partyId, user, refreshVoteData, refreshSuggestionData]);
+
+  useEffect(() => {
+    const currentVotingOpen = party?.voting_open;
+    if (currentVotingOpen && !prevVotingOpen.current) {
+      const resetUserVotes = async () => {
+        if (!user || !partyId) return;
+        await supabase
+          .from("votes")
+          .delete()
+          .match({ user_id: user.id, party_id: partyId });
+        refreshVoteData();
+      };
+      resetUserVotes();
+    }
+    prevVotingOpen.current = currentVotingOpen;
+  }, [party?.voting_open, partyId, user, refreshVoteData]);
 
   useEffect(() => {
     if (
@@ -291,24 +294,6 @@ const ViewWatchParty = () => {
     setIntermissionTime(initialRemaining > 0 ? initialRemaining : 0);
     return () => clearInterval(intervalId);
   }, [party?.party_state]);
-
-  useEffect(() => {
-    if (
-      party?.movies_watched &&
-      party.movies_watched.length > (prevMoviesWatchedRef.current?.length || 0)
-    ) {
-      const newWatchedMovie =
-        party.movies_watched[party.movies_watched.length - 1];
-      if (newWatchedMovie?.status === "watched") {
-        const fetchAndSetReviewMovie = async () => {
-          const movieDetails = await getMovieDetails(newWatchedMovie.id);
-          if (movieDetails) setMovieToReview(movieDetails);
-        };
-        fetchAndSetReviewMovie();
-      }
-    }
-    prevMoviesWatchedRef.current = party?.movies_watched;
-  }, [party?.movies_watched]);
 
   useEffect(() => {
     const fetchAllMovieDetails = async () => {
@@ -358,7 +343,7 @@ const ViewWatchParty = () => {
 
   const handleSuggestMovie = async (movie) => {
     if (userSuggestionCount >= 2) return;
-    await supabase.from("suggestions").insert({
+    const { error } = await supabase.from("suggestions").insert({
       party_id: partyId,
       user_id: user.id,
       movie_tmdb_id: movie.id,
@@ -366,19 +351,18 @@ const ViewWatchParty = () => {
       movie_year: movie.year,
       movie_image_url: movie.imageUrl,
     });
+    if (!error) {
+      refreshSuggestionData(); // Optimistic update
+    }
   };
 
   const handleRemoveSuggestion = async (suggestionId) => {
-    // Try to delete the suggestion from the database
     const { error } = await supabase
       .from("suggestions")
       .delete()
       .eq("id", suggestionId);
-
-    // If the deletion was successful, update the local UI immediately
     if (!error) {
-      // Re-fetch the data to ensure counts are accurate
-      refreshSuggestionData();
+      refreshSuggestionData(); // Optimistic update
     }
   };
 

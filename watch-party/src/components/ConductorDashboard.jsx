@@ -78,6 +78,7 @@ const ConductorDashboard = () => {
   const { partyId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userProfileRef = useRef();
 
   const [party, setParty] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +98,10 @@ const ConductorDashboard = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [movieToReview, setMovieToReview] = useState(null);
   const prevMoviesWatchedRef = useRef([]);
+
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
 
   // --- ADDED BACK: Data refresh functions ---
   const refreshVoteCounts = useCallback(async () => {
@@ -124,6 +129,7 @@ const ConductorDashboard = () => {
   }, [partyId]);
 
   // --- UPDATED: useEffect for Realtime and Data Fetching ---
+  // --- useEffect for Initial Data Fetching ---
   useEffect(() => {
     if (!partyId || !user) return;
 
@@ -137,19 +143,28 @@ const ConductorDashboard = () => {
           .eq("id", user.id)
           .single(),
       ]);
+
       if (partyRes.error) setError("Failed to load party details.");
       else setParty(partyRes.data);
-      setUserProfile(profileRes.data);
-      // Fetch initial counts
+
+      if (profileRes.data) setUserProfile(profileRes.data);
+
       await Promise.all([refreshVoteCounts(), refreshSuggestionData()]);
       setLoading(false);
     };
-    fetchInitialData();
 
+    fetchInitialData();
+  }, [partyId, user, refreshVoteCounts, refreshSuggestionData]); // This runs once when these stable functions are created
+
+  useEffect(() => {
+    if (!partyId || !user) return;
+
+    // This is the single channel for the dashboard.
     const partyChannel = supabase.channel(`party:${partyId}`, {
       config: { presence: { key: user.id } },
     });
 
+    // Set up all necessary listeners before subscribing
     partyChannel
       .on(
         "postgres_changes",
@@ -161,7 +176,6 @@ const ConductorDashboard = () => {
         },
         (payload) => setParty(payload.new)
       )
-      // --- FIXED: Connect listeners to the refresh functions ---
       .on(
         "postgres_changes",
         {
@@ -194,6 +208,7 @@ const ConductorDashboard = () => {
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
+          // Announce presence when connected
           await partyChannel.track({
             user_id: user.id,
             username: user.user_metadata?.username || "Conductor",
@@ -202,6 +217,7 @@ const ConductorDashboard = () => {
         }
       });
 
+    // Cleanup function
     return () => {
       supabase.removeChannel(partyChannel);
     };
@@ -265,25 +281,6 @@ const ConductorDashboard = () => {
     return () => clearInterval(intervalId);
   }, [party?.party_state, party?.conductor_id, user?.id]);
 
-  useEffect(() => {
-    if (userProfile?.prompt_for_reviews === false) return;
-    if (
-      party?.movies_watched &&
-      party.movies_watched.length > (prevMoviesWatchedRef.current?.length || 0)
-    ) {
-      const newWatchedMovie =
-        party.movies_watched[party.movies_watched.length - 1];
-      if (newWatchedMovie?.status === "watched") {
-        const fetchAndSetReviewMovie = async () => {
-          const movieDetails = await getMovieDetails(newWatchedMovie.id);
-          if (movieDetails) setMovieToReview(movieDetails);
-        };
-        fetchAndSetReviewMovie();
-      }
-    }
-    prevMoviesWatchedRef.current = party?.movies_watched;
-  }, [party?.movies_watched, userProfile]);
-
   const updatePartyStatus = async (updates) => {
     const { error } = await supabase
       .from("watch_parties")
@@ -331,8 +328,27 @@ const ConductorDashboard = () => {
     updatePartyStatus({ party_state: { status: "paused" } });
   };
 
-  const handleFinishMovie = (status) => {
+  const handleFinishMovie = async (status) => {
+    // Make the function async
     if (!nowPlayingMovieDetails) return;
+
+    if (status === "watched") {
+      const channel = supabase.channel(`party:${partyId}`);
+      channel.send({
+        type: "broadcast",
+        event: "movie-finished",
+        payload: { movieId: nowPlayingMovieDetails.id },
+      });
+      supabase.removeChannel(channel);
+
+      // --- NEW: Trigger the modal for the conductor ---
+      if (userProfile?.prompt_for_reviews) {
+        // We already have the movie details, so we can use them directly
+        setMovieToReview(nowPlayingMovieDetails);
+      }
+    }
+
+    // The rest of the function updates the database as before
     const finishedMovie = { id: nowPlayingMovieDetails.id, status: status };
     const newWatchedList = [...(party.movies_watched || []), finishedMovie];
     let updates = {
@@ -431,6 +447,16 @@ const ConductorDashboard = () => {
   const handleRemoveFromPoll = (movieId) => {
     const newPollMovies = party.poll_movies.filter((m) => m.id !== movieId);
     updatePartyStatus({ poll_movies: newPollMovies });
+  };
+  const handleRemoveFromWatched = (indexToRemove) => {
+    // Create a new copy of the watched movies array from the current party state
+    const currentWatchedList = [...(party.movies_watched || [])];
+
+    // Remove the movie at the specified index
+    currentWatchedList.splice(indexToRemove, 1);
+
+    // Update the party in the database with the new, shorter watched list
+    updatePartyStatus({ movies_watched: currentWatchedList });
   };
 
   const handleMoveSuggestionToPoll = async (suggestion) => {
@@ -595,6 +621,7 @@ const ConductorDashboard = () => {
                   upNext={upNextMovie}
                   onMarkWatched={() => handleFinishMovie("watched")}
                   onSkipMovie={() => handleFinishMovie("skipped")}
+                  onRemoveWatched={handleRemoveFromWatched}
                   playState={party.party_state?.status}
                   intermissionTime={intermissionTime}
                   isConductor={true}

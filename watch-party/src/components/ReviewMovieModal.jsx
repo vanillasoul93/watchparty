@@ -57,7 +57,7 @@ const ReviewMovieModal = ({ movie, onSave, onClose, onAddToFavorites }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl relative">
         <button
           onClick={onClose}
