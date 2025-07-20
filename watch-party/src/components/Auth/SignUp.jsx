@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../../contexts/Auth";
+import { Link } from "react-router-dom";
 
 export default function SignUp({ setView }) {
   const [email, setEmail] = useState("");
@@ -86,12 +87,9 @@ export default function SignUp({ setView }) {
         </form>
         <p className="text-center text-gray-400 mt-4">
           Already have an account?{" "}
-          <button
-            onClick={() => setView("login")}
-            className="text-indigo-400 hover:underline"
-          >
+          <Link to="/login" className="text-indigo-400 hover:underline">
             Log In
-          </button>
+          </Link>
         </p>
       </div>
     </div>

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
+import { useNavigate } from "react-router-dom";
+import { getMovieDetails } from "../api/tmdb";
 import {
   PlayCircle,
   CheckCircle,
   Clock,
   Users,
   Film,
-  Vote,
   XCircle,
   Star,
   LayoutDashboard,
@@ -16,36 +17,8 @@ import {
   SkipForward,
   Timer,
   Trash2,
+  Vote,
 } from "lucide-react";
-
-// --- TMDB API Helper ---
-const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
-const tmdbBaseUrl = "https://api.themoviedb.org/3";
-const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
-
-const getMovieDetails = async (movieId) => {
-  if (!movieId) return null;
-  try {
-    const response = await fetch(
-      `${tmdbBaseUrl}/movie/${movieId}?api_key=${tmdbApiKey}`
-    );
-    if (!response.ok) throw new Error("Failed to fetch movie details");
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.title,
-      year: data.release_date ? data.release_date.split("-")[0] : "N/A",
-      imageUrl: data.poster_path
-        ? `${tmdbImageUrl}${data.poster_path}`
-        : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
-      runtime: data.runtime || 0,
-    };
-  } catch (error) {
-    console.error("Error fetching movie details:", error);
-    return null;
-  }
-};
-// --- End TMDB API Helper ---
 
 const PartyCard = ({
   party,
@@ -53,33 +26,33 @@ const PartyCard = ({
   onCrashParty,
   onReopenParty,
   onDeleteParty,
-  onSelectDashboard,
-  onJoinParty,
+  isConcluded,
 }) => {
+  const navigate = useNavigate();
+
   const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
   const [upNextDetails, setUpNextDetails] = useState(null);
   const [intermissionTime, setIntermissionTime] = useState(0);
 
   useEffect(() => {
+    if (isConcluded) return; // Don't fetch details for concluded cards
     const fetchCardMovieDetails = async () => {
-      if (party.now_playing_tmdb_id) {
-        const details = await getMovieDetails(party.now_playing_tmdb_id);
-        setNowPlayingDetails(details);
-      } else {
-        setNowPlayingDetails(null);
-      }
-
-      if (party.up_next_tmdb_id) {
-        const details = await getMovieDetails(party.up_next_tmdb_id);
-        setUpNextDetails(details);
-      } else {
-        setUpNextDetails(null);
-      }
+      setNowPlayingDetails(
+        party.now_playing_tmdb_id
+          ? await getMovieDetails(party.now_playing_tmdb_id)
+          : null
+      );
+      setUpNextDetails(
+        party.up_next_tmdb_id
+          ? await getMovieDetails(party.up_next_tmdb_id)
+          : null
+      );
     };
     fetchCardMovieDetails();
-  }, [party.now_playing_tmdb_id, party.up_next_tmdb_id]);
+  }, [party.now_playing_tmdb_id, party.up_next_tmdb_id, isConcluded]);
 
   useEffect(() => {
+    if (isConcluded) return; // Don't run timer logic for concluded cards
     if (
       party.party_state?.status === "intermission" &&
       party.party_state.ends_at
@@ -91,7 +64,7 @@ const PartyCard = ({
     } else {
       setIntermissionTime(0);
     }
-  }, [party.party_state]);
+  }, [party.party_state, isConcluded]);
 
   useEffect(() => {
     if (intermissionTime > 0) {
@@ -109,12 +82,10 @@ const PartyCard = ({
   const isConductor = currentUser && currentUser.id === party.conductor_id;
   const canReopen =
     isConductor &&
-    party.status === "concluded" &&
     party.end_time &&
     new Date() - new Date(party.end_time) < 3600000;
 
   const isPlaying = party.party_state?.status === "playing";
-  const isPaused = party.party_state?.status === "paused";
   const isIntermission = party.party_state?.status === "intermission";
 
   return (
@@ -127,11 +98,6 @@ const PartyCard = ({
         }
         alt={nowPlayingDetails?.title || party.featured_movie}
         className="w-full h-48 object-cover rounded-t-xl"
-        onError={(e) => {
-          e.target.onerror = null;
-          e.target.src =
-            "https://placehold.co/400x225/1a202c/ffffff?text=Error";
-        }}
       />
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex justify-between items-start mb-4">
@@ -145,120 +111,135 @@ const PartyCard = ({
           </div>
           <div
             className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-              party.status === "active"
+              !isConcluded
                 ? "bg-green-500/20 text-green-400"
                 : "bg-gray-600/30 text-gray-300"
             }`}
           >
-            {party.status === "active" ? (
+            {!isConcluded ? (
               <PlayCircle size={16} />
             ) : (
               <CheckCircle size={16} />
             )}
-            <span>{party.status === "active" ? "Active" : "Concluded"}</span>
+            <span>{!isConcluded ? "Active" : "Concluded"}</span>
           </div>
         </div>
 
-        <div className="space-y-3 text-gray-300 mb-4">
-          {party.voting_open && (
-            <div className="flex items-center gap-3 bg-blue-500/20 text-blue-300 px-3 py-1 rounded-md">
-              <Vote size={18} />
-              <span className="font-semibold">Voting is Open!</span>
+        {/* --- Conditional Info Display --- */}
+        {isConcluded ? (
+          <div className="space-y-3 text-gray-300 mb-4">
+            <div className="flex items-center gap-3">
+              <Clock size={18} className="text-indigo-400" />
+              <span>{`Ended: ${formatTime(party.end_time)}`}</span>
             </div>
-          )}
-          <div
-            className={`flex items-center gap-3 p-2 rounded-md ${
-              isPlaying
-                ? "bg-green-500/20 text-green-300"
-                : isPaused || isIntermission
-                ? "bg-yellow-500/20 text-yellow-300"
-                : ""
-            }`}
-          >
-            {isPlaying && <PlayCircle size={18} className="text-green-400" />}
-            {isPaused && <PauseCircle size={18} className="text-yellow-400" />}
-            {isIntermission && <Timer size={18} className="text-yellow-400" />}
-            {!isPlaying && !isPaused && !isIntermission && (
-              <Film size={18} className="text-indigo-400" />
+          </div>
+        ) : (
+          <div className="space-y-3 text-gray-300 mb-4">
+            {party.voting_open && (
+              <div className="flex items-center gap-3 bg-blue-500/20 text-blue-300 px-3 py-1 rounded-md">
+                <Vote size={18} />
+                <span className="font-semibold">Voting is Open!</span>
+              </div>
             )}
-
-            <span>
-              {isPaused ? "Paused: " : "Now Playing: "}
-              <span className="font-semibold text-white ml-1">
-                {nowPlayingDetails?.title || "N/A"} (
-                {nowPlayingDetails?.year || "..."})
-              </span>
-            </span>
-          </div>
-          {upNextDetails && (
-            <div className="flex items-center gap-3 bg-purple-500/20 text-purple-300 px-3 py-1 rounded-md">
-              <SkipForward size={18} />
-              <span className="font-semibold">
-                Up Next: {upNextDetails.title} ({upNextDetails.year})
-              </span>
+            {isIntermission ? (
+              <div className="flex items-center gap-3 p-2 rounded-md bg-yellow-500/20 text-yellow-300">
+                <Timer size={18} className="text-yellow-400" />
+                <span className="font-semibold">
+                  Intermission: {formatTimer(intermissionTime)}
+                </span>
+              </div>
+            ) : (
+              <div
+                className={`flex items-center gap-3 p-2 rounded-md ${
+                  isPlaying
+                    ? "bg-green-500/20 text-green-300"
+                    : "bg-yellow-500/20 text-yellow-300"
+                }`}
+              >
+                {isPlaying ? (
+                  <PlayCircle size={18} className="text-green-400" />
+                ) : (
+                  <PauseCircle size={18} className="text-yellow-400" />
+                )}
+                <span>
+                  {isPlaying ? "Playing: " : "Paused: "}
+                  <span className="font-semibold text-white ml-1">
+                    {nowPlayingDetails?.title || "N/A"}
+                  </span>
+                </span>
+              </div>
+            )}
+            {upNextDetails && (
+              <div className="flex items-center gap-3 bg-purple-500/20 text-purple-300 px-3 py-1 rounded-md">
+                <SkipForward size={18} />
+                <span className="font-semibold">
+                  Up Next: {upNextDetails.title}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <Users size={18} className="text-indigo-400" />
+              <span>{party.viewers_count || "1"} viewers</span>
             </div>
-          )}
-          <div className="flex items-center gap-3">
-            <Clock size={18} className="text-indigo-400" />
-            <span>
-              {party.status === "active"
-                ? `Starts: ${formatTime(party.scheduled_start_time)}`
-                : `Ended: ${formatTime(party.end_time)}`}
-            </span>
           </div>
-          <div className="flex items-center gap-3">
-            <Users size={18} className="text-indigo-400" />
-            <span>{party.viewers_count} viewers</span>
-          </div>
-        </div>
+        )}
 
         <div className="mt-auto">
-          {party.status === "active" ? (
+          {/* --- Conditional Button Display --- */}
+          {!isConcluded ? (
+            // Active Party Buttons
             isConductor ? (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => onSelectDashboard(party.id)}
-                  className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 h-10 "
+                  onClick={() => navigate(`/dashboard/${party.id}`)}
+                  className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
                 >
-                  <LayoutDashboard size={18} />
-                  Dashboard
+                  <LayoutDashboard size={18} /> Dashboard
                 </button>
                 <button
                   onClick={() => onCrashParty(party.id)}
-                  className="flex-shrink-0 bg-gray-700 hover:bg-red-900 text-red-400 text-center flex justify-center place-items-center font-bold p-1 rounded-lg transition-all duration-300 h-10 w-10 "
+                  className="flex-shrink-0 bg-gray-700 hover:bg-red-900 text-red-400 p-2 rounded-lg"
                 >
-                  <XCircle size={26} />
+                  <XCircle size={20} />
                 </button>
               </div>
             ) : (
               <button
-                onClick={() => onJoinParty(party.id)}
-                className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg transition-all duration-300"
+                onClick={() => navigate(`/party/${party.id}`)}
+                className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg"
               >
                 Join Party
               </button>
             )
-          ) : isConductor ? (
-            <div className="flex items-center gap-2">
+          ) : // Concluded Party Buttons
+          isConductor ? (
+            <div className="grid grid-cols-3 gap-2">
               {canReopen && (
                 <button
                   onClick={() => onReopenParty(party.id)}
-                  className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                  className="col-span-3 bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
                 >
-                  <RefreshCw size={18} />
-                  Re-Open
+                  <RefreshCw size={18} /> Re-Open
                 </button>
               )}
               <button
-                onClick={() => onDeleteParty(party.id)}
-                className="w-full bg-gray-700 hover:bg-red-900 text-red-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                onClick={() => alert("Review feature coming soon!")}
+                className="col-span-3 bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
               >
-                <Trash2 size={18} />
-                Delete
+                <Star size={18} /> Review
+              </button>
+              <button
+                onClick={() => onDeleteParty(party.id)}
+                className="col-span-3 bg-gray-700 hover:bg-red-900 text-red-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
+              >
+                <Trash2 size={18} /> Delete Party
               </button>
             </div>
           ) : (
-            <button className="w-full bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2">
+            <button
+              onClick={() => alert("Review feature coming soon!")}
+              className="w-full bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
+            >
               <Star size={18} />
               Review Party
             </button>
@@ -269,54 +250,55 @@ const PartyCard = ({
   );
 };
 
-const ConductorsPage = ({
-  activeParties,
-  concludedParties,
-  loading,
-  error,
-  onSelectDashboard,
-  onJoinParty,
-  refreshParties,
-}) => {
+const ConductorsPage = () => {
   const { user } = useAuth();
+
+  const [activeParties, setActiveParties] = useState([]);
+  const [concludedParties, setConcludedParties] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchParties = async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("watch_parties")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Error fetching parties:", error);
+      setError(error.message);
+    } else {
+      setActiveParties(data.filter((p) => p.status === "active"));
+      setConcludedParties(data.filter((p) => p.status === "concluded"));
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchParties();
+  }, []);
 
   const handleCrashParty = async (partyId) => {
     const { error } = await supabase
       .from("watch_parties")
       .update({ status: "concluded", end_time: new Date().toISOString() })
       .eq("id", partyId);
-
-    if (error) {
-      console.error("Could not end the party:", error);
-    } else {
-      refreshParties();
-    }
+    if (!error) fetchParties();
   };
-
   const handleReopenParty = async (partyId) => {
     const { error } = await supabase
       .from("watch_parties")
       .update({ status: "active", end_time: null })
       .eq("id", partyId);
-
-    if (error) {
-      console.error("Could not re-open the party:", error);
-    } else {
-      refreshParties();
-    }
+    if (!error) fetchParties();
   };
-
   const handleDeleteParty = async (partyId) => {
     const { error } = await supabase
       .from("watch_parties")
       .delete()
       .eq("id", partyId);
-
-    if (error) {
-      console.error("Could not delete the party:", error);
-    } else {
-      refreshParties();
-    }
+    if (!error) fetchParties();
   };
 
   if (loading) {
@@ -324,7 +306,6 @@ const ConductorsPage = ({
       <div className="text-center text-white pt-40">Loading parties...</div>
     );
   }
-
   if (error) {
     return <div className="text-center text-red-500 pt-40">Error: {error}</div>;
   }
@@ -335,7 +316,6 @@ const ConductorsPage = ({
         <h1 className="text-5xl font-extrabold text-white text-center mb-12">
           Conductor Hub
         </h1>
-
         <section>
           <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-green-500 pl-4">
             Active Now
@@ -350,8 +330,7 @@ const ConductorsPage = ({
                   onCrashParty={handleCrashParty}
                   onReopenParty={handleReopenParty}
                   onDeleteParty={handleDeleteParty}
-                  onSelectDashboard={onSelectDashboard}
-                  onJoinParty={onJoinParty}
+                  isConcluded={false}
                 />
               ))}
             </div>
@@ -361,7 +340,6 @@ const ConductorsPage = ({
             </p>
           )}
         </section>
-
         <section className="mt-16">
           <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-gray-500 pl-4">
             Recently Concluded
@@ -376,8 +354,7 @@ const ConductorsPage = ({
                   onCrashParty={handleCrashParty}
                   onReopenParty={handleReopenParty}
                   onDeleteParty={handleDeleteParty}
-                  onSelectDashboard={onSelectDashboard}
-                  onJoinParty={onJoinParty}
+                  isConcluded={true}
                 />
               ))}
             </div>

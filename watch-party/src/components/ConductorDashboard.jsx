@@ -1,78 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
-import {
-  ArrowLeft,
-  Play,
-  Pause,
-  XCircle,
-  SkipForward,
-  SkipBack,
-  Vote,
-  Users,
-  Clapperboard,
-  Timer,
-  FilmIcon,
-  PlusCircle,
-  Search,
-  Check,
-  X,
-  Trash2,
-} from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { getMovieDetails, searchTMDb } from "../api/tmdb";
 import WatchList from "./WatchList";
 import DashboardControls from "./DashboardControls";
 import MoviePoll from "./MoviePoll";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
-
-// --- TMDB API Helper ---
-const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
-const tmdbBaseUrl = "https://api.themoviedb.org/3";
-const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
-
-const getMovieDetails = async (movieId) => {
-  if (!movieId) return null;
-  try {
-    const response = await fetch(
-      `${tmdbBaseUrl}/movie/${movieId}?api_key=${tmdbApiKey}`
-    );
-    if (!response.ok) throw new Error("Failed to fetch movie details");
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.title,
-      year: data.release_date ? data.release_date.split("-")[0] : "N/A",
-      imageUrl: data.poster_path
-        ? `${tmdbImageUrl}${data.poster_path}`
-        : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
-      runtime: data.runtime || 0,
-    };
-  } catch (error) {
-    console.error("Error fetching movie details:", error);
-    return null;
-  }
-};
-
-const searchTMDb = async (query) => {
-  if (!query) return [];
-  try {
-    const response = await fetch(
-      `${tmdbBaseUrl}/search/movie?api_key=${tmdbApiKey}&query=${encodeURIComponent(
-        query
-      )}`
-    );
-    if (!response.ok) throw new Error("Failed to fetch from TMDB");
-    const data = await response.json();
-    const detailedResults = await Promise.all(
-      data.results.map((movie) => getMovieDetails(movie.id))
-    );
-    return detailedResults.filter(Boolean);
-  } catch (error) {
-    console.error("Error searching TMDB:", error);
-    return [];
-  }
-};
-// --- End TMDB API Helper ---
+import ReviewMovieModal from "./ReviewMovieModal";
+import { ArrowLeft, Search } from "lucide-react";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -125,11 +62,6 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
                 src={movie.imageUrl}
                 alt={movie.title}
                 className="w-10 h-16 object-cover rounded"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src =
-                    "https://placehold.co/40x60/1a202c/ffffff?text=Err";
-                }}
               />
               <span>
                 {movie.title} ({movie.year})
@@ -142,69 +74,94 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   );
 };
 
-const ConductorDashboard = ({ partyId, onBack }) => {
+const ConductorDashboard = () => {
+  const { partyId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
+
   const [party, setParty] = useState(null);
-  const [watchedMovieDetails, setWatchedMovieDetails] = useState([]);
-  const [nowPlayingMovieDetails, setNowPlayingMovieDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [intermissionTime, setIntermissionTime] = useState(0);
+  const [watchedMovieDetails, setWatchedMovieDetails] = useState([]);
+  const [nowPlayingMovieDetails, setNowPlayingMovieDetails] = useState(null);
+  const [upNextMovie, setUpNextMovie] = useState(null);
   const [customIntermissionMinutes, setCustomIntermissionMinutes] =
     useState(15);
-  const [upNextMovie, setUpNextMovie] = useState(null);
+  const [intermissionTime, setIntermissionTime] = useState(0);
+  const [pollVoteCounts, setPollVoteCounts] = useState({});
+  const [suggestions, setSuggestions] = useState([]);
+  const [viewers, setViewers] = useState([]);
   const [isAddingToPoll, setIsAddingToPoll] = useState(false);
   const [showZeroVotesDialog, setShowZeroVotesDialog] = useState(false);
   const [showCrashConfirmation, setShowCrashConfirmation] = useState(false);
-  const [pollVoteCounts, setPollVoteCounts] = useState({});
-  const [suggestions, setSuggestions] = useState([]);
+  const [userProfile, setUserProfile] = useState(null);
+  const [movieToReview, setMovieToReview] = useState(null);
+  const prevMoviesWatchedRef = useRef([]);
 
-  const refreshVoteCounts = async () => {
+  // --- ADDED BACK: Data refresh functions ---
+  const refreshVoteCounts = useCallback(async () => {
     if (!partyId) return;
-    const { data: allVotesData } = await supabase
+    const { data } = await supabase
       .from("votes")
       .select("movie_tmdb_id")
       .eq("party_id", partyId);
-    const counts = allVotesData
-      ? allVotesData.reduce((acc, vote) => {
+    const counts = data
+      ? data.reduce((acc, vote) => {
           acc[vote.movie_tmdb_id] = (acc[vote.movie_tmdb_id] || 0) + 1;
           return acc;
         }, {})
       : {};
     setPollVoteCounts(counts);
-  };
+  }, [partyId]);
 
-  const refreshSuggestionData = async () => {
+  const refreshSuggestionData = useCallback(async () => {
     if (!partyId) return;
     const { data } = await supabase
       .from("suggestions")
       .select("*")
       .eq("party_id", partyId);
     if (data) setSuggestions(data);
-  };
+  }, [partyId]);
 
+  // --- UPDATED: useEffect for Realtime and Data Fetching ---
   useEffect(() => {
-    const fetchPartyDetails = async () => {
-      if (!partyId) return;
+    if (!partyId || !user) return;
+
+    const fetchInitialData = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("watch_parties")
-        .select("*")
-        .eq("id", partyId)
-        .single();
-      if (error) {
-        setError("Failed to load party details.");
-      } else {
-        setParty(data);
-      }
+      const [partyRes, profileRes] = await Promise.all([
+        supabase.from("watch_parties").select("*").eq("id", partyId).single(),
+        supabase
+          .from("profiles")
+          .select("prompt_for_reviews")
+          .eq("id", user.id)
+          .single(),
+      ]);
+      if (partyRes.error) setError("Failed to load party details.");
+      else setParty(partyRes.data);
+      setUserProfile(profileRes.data);
+      // Fetch initial counts
+      await Promise.all([refreshVoteCounts(), refreshSuggestionData()]);
       setLoading(false);
     };
-    fetchPartyDetails();
-    refreshVoteCounts();
-    refreshSuggestionData();
+    fetchInitialData();
 
-    const votesChannel = supabase
-      .channel(`dashboard-votes-${partyId}`)
+    const partyChannel = supabase.channel(`party:${partyId}`, {
+      config: { presence: { key: user.id } },
+    });
+
+    partyChannel
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "watch_parties",
+          filter: `id=eq.${partyId}`,
+        },
+        (payload) => setParty(payload.new)
+      )
+      // --- FIXED: Connect listeners to the refresh functions ---
       .on(
         "postgres_changes",
         {
@@ -215,9 +172,6 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         },
         refreshVoteCounts
       )
-      .subscribe();
-    const suggestionsChannel = supabase
-      .channel(`dashboard-suggestions-${partyId}`)
       .on(
         "postgres_changes",
         {
@@ -228,40 +182,54 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         },
         refreshSuggestionData
       )
-      .subscribe();
+      .on("presence", { event: "sync" }, () => {
+        const presenceState = partyChannel.presenceState();
+        const currentViewers = Object.values(presenceState)
+          .map((p) => p[0])
+          .filter((p) => p.username);
+        currentViewers.sort(
+          (a, b) => (b.is_conductor ? 1 : 0) - (a.is_conductor ? 1 : 0)
+        );
+        setViewers(currentViewers);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await partyChannel.track({
+            user_id: user.id,
+            username: user.user_metadata?.username || "Conductor",
+            is_conductor: true,
+          });
+        }
+      });
 
     return () => {
-      supabase.removeChannel(votesChannel);
-      supabase.removeChannel(suggestionsChannel);
+      supabase.removeChannel(partyChannel);
     };
-  }, [partyId]);
+  }, [partyId, user, refreshVoteCounts, refreshSuggestionData]);
 
   useEffect(() => {
     const fetchAllMovieDetails = async () => {
       if (party) {
-        if (party.now_playing_tmdb_id) {
-          const details = await getMovieDetails(party.now_playing_tmdb_id);
-          setNowPlayingMovieDetails(details);
-        } else {
-          setNowPlayingMovieDetails(null);
-        }
-        if (party.up_next_tmdb_id) {
-          const upNextDetails = await getMovieDetails(party.up_next_tmdb_id);
-          setUpNextMovie(upNextDetails);
-        } else {
-          setUpNextMovie(null);
-        }
-        if (party.movies_watched && party.movies_watched.length > 0) {
+        setNowPlayingMovieDetails(
+          party.now_playing_tmdb_id
+            ? await getMovieDetails(party.now_playing_tmdb_id)
+            : null
+        );
+        setUpNextMovie(
+          party.up_next_tmdb_id
+            ? await getMovieDetails(party.up_next_tmdb_id)
+            : null
+        );
+        if (party.movies_watched?.length > 0) {
           const movieDetailsPromises = party.movies_watched.map(
-            async (watchedInfo) => {
-              const details = await getMovieDetails(watchedInfo.id);
-              return details
-                ? { ...details, status: watchedInfo.status }
-                : null;
+            async (info) => {
+              const details = await getMovieDetails(info.id);
+              return details ? { ...details, status: info.status } : null;
             }
           );
-          const detailedMovies = await Promise.all(movieDetailsPromises);
-          setWatchedMovieDetails(detailedMovies.filter(Boolean));
+          setWatchedMovieDetails(
+            (await Promise.all(movieDetailsPromises)).filter(Boolean)
+          );
         } else {
           setWatchedMovieDetails([]);
         }
@@ -272,43 +240,57 @@ const ConductorDashboard = ({ partyId, onBack }) => {
 
   useEffect(() => {
     if (
-      party?.party_state?.status === "intermission" &&
-      party.party_state.ends_at
+      party?.party_state?.status !== "intermission" ||
+      !party.party_state.ends_at
     ) {
-      const endsAt = new Date(party.party_state.ends_at).getTime();
+      setIntermissionTime(0);
+      return;
+    }
+    const endsAt = new Date(party.party_state.ends_at).getTime();
+    const intervalId = setInterval(() => {
       const now = new Date().getTime();
       const remaining = Math.round((endsAt - now) / 1000);
-      setIntermissionTime(remaining > 0 ? remaining : 0);
-    } else {
-      setIntermissionTime(0);
-    }
-  }, [party]);
+      if (remaining > 0) {
+        setIntermissionTime(remaining);
+      } else {
+        setIntermissionTime(0);
+        if (user.id === party.conductor_id) {
+          updatePartyStatus({ party_state: { status: "paused" } });
+        }
+        clearInterval(intervalId);
+      }
+    }, 1000);
+    const initialRemaining = Math.round((endsAt - new Date().getTime()) / 1000);
+    setIntermissionTime(initialRemaining > 0 ? initialRemaining : 0);
+    return () => clearInterval(intervalId);
+  }, [party?.party_state, party?.conductor_id, user?.id]);
 
   useEffect(() => {
-    if (intermissionTime > 0) {
-      const timer = setTimeout(
-        () => setIntermissionTime(intermissionTime - 1),
-        1000
-      );
-      return () => clearTimeout(timer);
-    } else if (
-      intermissionTime === 0 &&
-      party?.party_state?.status === "intermission"
+    if (userProfile?.prompt_for_reviews === false) return;
+    if (
+      party?.movies_watched &&
+      party.movies_watched.length > (prevMoviesWatchedRef.current?.length || 0)
     ) {
-      updatePartyStatus({ party_state: { status: "paused" } });
+      const newWatchedMovie =
+        party.movies_watched[party.movies_watched.length - 1];
+      if (newWatchedMovie?.status === "watched") {
+        const fetchAndSetReviewMovie = async () => {
+          const movieDetails = await getMovieDetails(newWatchedMovie.id);
+          if (movieDetails) setMovieToReview(movieDetails);
+        };
+        fetchAndSetReviewMovie();
+      }
     }
-  }, [intermissionTime]);
+    prevMoviesWatchedRef.current = party?.movies_watched;
+  }, [party?.movies_watched, userProfile]);
 
   const updatePartyStatus = async (updates) => {
     const { error } = await supabase
       .from("watch_parties")
       .update(updates)
       .eq("id", partyId);
-    if (error) {
-      setError("Failed to update party.");
-    } else {
-      setParty((prev) => ({ ...prev, ...updates }));
-    }
+    if (error) setError("Failed to update party.");
+    else setParty((prev) => ({ ...prev, ...updates }));
   };
 
   const handleStartIntermission = (minutes) => {
@@ -319,80 +301,16 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     }
   };
 
-  const handleOpenPoll = async () => {
-    await supabase.from("votes").delete().eq("party_id", partyId);
-    setPollVoteCounts({});
-    updatePartyStatus({ voting_open: true });
-  };
-
-  const handleClosePoll = () => {
-    if (!party.poll_movies || party.poll_movies.length === 0) return;
-    const totalVotes = Object.values(pollVoteCounts).reduce(
-      (sum, count) => sum + count,
-      0
-    );
-    if (totalVotes === 0) {
-      setShowZeroVotesDialog(true);
-      return;
-    }
-    const winner = party.poll_movies.reduce((prev, current) =>
-      (prev.votes || 0) > (current.votes || 0) ? prev : current
-    );
-    setUpNextMovie(winner);
-    updatePartyStatus({
-      voting_open: false,
-      up_next_tmdb_id: winner.id,
-    });
-  };
-
-  const handleSelectRandom = () => {
-    const randomIndex = Math.floor(Math.random() * party.poll_movies.length);
-    const randomMovie = party.poll_movies[randomIndex];
-    setUpNextMovie(randomMovie);
-    updatePartyStatus({
-      voting_open: false,
-      up_next_tmdb_id: randomMovie.id,
-    });
-    setShowZeroVotesDialog(false);
-  };
-
-  const handleCrashFromDialog = () => {
-    setShowZeroVotesDialog(false);
-    handleCrashParty();
-  };
-
-  const handleCancelPoll = () => {
-    updatePartyStatus({ voting_open: false });
-    setShowZeroVotesDialog(false);
-  };
-
-  const handleReturnToPoll = () => {
-    setShowZeroVotesDialog(false);
-  };
-
-  const handleAddMovieToPoll = (movie) => {
-    if (party.poll_movies.length < 10) {
-      const newPollMovies = [...party.poll_movies, movie];
-      updatePartyStatus({ poll_movies: newPollMovies });
-    }
-    setIsAddingToPoll(false);
-  };
-
-  const handleRemoveFromPoll = (movieIdToRemove) => {
-    const newPollMovies = party.poll_movies.filter(
-      (movie) => movie.id !== movieIdToRemove
-    );
-    updatePartyStatus({ poll_movies: newPollMovies });
+  const handleEndIntermission = () => {
+    updatePartyStatus({ party_state: { status: "paused" } });
   };
 
   const handlePlay = () => {
-    if (party?.party_state?.status === "intermission") {
+    if (nowPlayingMovieDetails) {
       updatePartyStatus({ party_state: { status: "playing" } });
       return;
     }
-    if (nowPlayingMovieDetails) {
-      updatePartyStatus({ party_state: { status: "playing" } });
-    } else if (upNextMovie) {
+    if (upNextMovie) {
       const newPollList = party.poll_movies.filter(
         (movie) => movie.id !== upNextMovie.id
       );
@@ -413,53 +331,19 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     updatePartyStatus({ party_state: { status: "paused" } });
   };
 
-  const handleConductorCheck = () => {
-    const isConductor = currentUser && currentUser.id === party.conductor_id;
-    return isConductor;
-  };
-
   const handleFinishMovie = (status) => {
     if (!nowPlayingMovieDetails) return;
-    const finishedMovie = {
-      id: nowPlayingMovieDetails.id,
-      status: status,
-    };
+    const finishedMovie = { id: nowPlayingMovieDetails.id, status: status };
     const newWatchedList = [...(party.movies_watched || []), finishedMovie];
-
+    let updates = {
+      now_playing_tmdb_id: null,
+      movies_watched: newWatchedList,
+      party_state: { status: "paused" },
+    };
     if (party.poll_movies.length > 0 && upNextMovie === null) {
-      updatePartyStatus({
-        now_playing_tmdb_id: null,
-        movies_watched: newWatchedList,
-        voting_open: true,
-        party_state: { status: "paused" },
-      });
-      console.log("Running auto poll open, Up Next: " + upNextMovie);
-    } else if (upNextMovie) {
-      updatePartyStatus({
-        now_playing_tmdb_id: null,
-        movies_watched: newWatchedList,
-        voting_open: false,
-        party_state: { status: "paused" },
-      });
-      console.log("Running poll closed");
-    } else {
-      updatePartyStatus({
-        now_playing_tmdb_id: null,
-        movies_watched: newWatchedList,
-        voting_open: false,
-        party_state: { status: "paused" },
-      });
-      console.log("Running poll closed");
+      updates.voting_open = true;
     }
-  };
-
-  const handleMarkAsWatched = () => handleFinishMovie("watched");
-  const handleSkipMovie = () => handleFinishMovie("skipped");
-
-  const handleRemoveFromWatched = (indexToRemove) => {
-    const currentWatchedList = [...(party.movies_watched || [])];
-    currentWatchedList.splice(indexToRemove, 1);
-    updatePartyStatus({ movies_watched: currentWatchedList });
+    updatePartyStatus(updates);
   };
 
   const handleCrashParty = () => {
@@ -470,16 +354,12 @@ const ConductorDashboard = ({ partyId, onBack }) => {
         status: "concluded",
         end_time: new Date().toISOString(),
       });
-      onBack();
+      navigate("/conductors");
     }
   };
 
   const handleConfirmCrash = (markAsWatched) => {
-    let updates = {
-      status: "concluded",
-      end_time: new Date().toISOString(),
-    };
-
+    let updates = { status: "concluded", end_time: new Date().toISOString() };
     if (markAsWatched && nowPlayingMovieDetails) {
       const finishedMovie = {
         id: nowPlayingMovieDetails.id,
@@ -488,14 +368,69 @@ const ConductorDashboard = ({ partyId, onBack }) => {
       updates.movies_watched = [...(party.movies_watched || []), finishedMovie];
       updates.now_playing_tmdb_id = null;
     }
-
     updatePartyStatus(updates);
     setShowCrashConfirmation(false);
-    onBack();
+    navigate("/conductors");
   };
 
   const handleCancelCrash = () => {
     setShowCrashConfirmation(false);
+  };
+
+  const handleOpenPoll = () => {
+    updatePartyStatus({ voting_open: true });
+  };
+
+  const handleClosePoll = () => {
+    if (!party.poll_movies || party.poll_movies.length === 0) return;
+    const totalVotes = Object.values(pollVoteCounts).reduce(
+      (sum, count) => sum + count,
+      0
+    );
+    if (totalVotes === 0) {
+      setShowZeroVotesDialog(true);
+      return;
+    }
+    const winner = party.poll_movies.reduce((prev, current) => {
+      const prevVotes = pollVoteCounts[prev.id] || 0;
+      const currentVotes = pollVoteCounts[current.id] || 0;
+      return prevVotes >= currentVotes ? prev : current;
+    });
+    setUpNextMovie(winner);
+    updatePartyStatus({ voting_open: false, up_next_tmdb_id: winner.id });
+  };
+
+  const handleSelectRandom = () => {
+    const randomIndex = Math.floor(Math.random() * party.poll_movies.length);
+    const randomMovie = party.poll_movies[randomIndex];
+    setUpNextMovie(randomMovie);
+    updatePartyStatus({ voting_open: false, up_next_tmdb_id: randomMovie.id });
+    setShowZeroVotesDialog(false);
+  };
+
+  const handleCrashFromDialog = () => {
+    setShowZeroVotesDialog(false);
+    handleCrashParty();
+  };
+
+  const handleCancelPoll = () => {
+    updatePartyStatus({ voting_open: false });
+    setShowZeroVotesDialog(false);
+  };
+
+  const handleReturnToPoll = () => {
+    setShowZeroVotesDialog(false);
+  };
+
+  const handleAddMovieToPoll = (movie) => {
+    const newPollMovies = [...party.poll_movies, movie];
+    updatePartyStatus({ poll_movies: newPollMovies });
+    setIsAddingToPoll(false);
+  };
+
+  const handleRemoveFromPoll = (movieId) => {
+    const newPollMovies = party.poll_movies.filter((m) => m.id !== movieId);
+    updatePartyStatus({ poll_movies: newPollMovies });
   };
 
   const handleMoveSuggestionToPoll = async (suggestion) => {
@@ -513,13 +448,41 @@ const ConductorDashboard = ({ partyId, onBack }) => {
     const newPollMovies = [...party.poll_movies, movieToAdd];
     await updatePartyStatus({ poll_movies: newPollMovies });
 
+    // Try to delete the suggestion from the database
     const { error } = await supabase
       .from("suggestions")
       .delete()
       .eq("id", suggestion.id);
+
+    // If the deletion was successful, update the UI immediately
     if (!error) {
-      setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
+      setSuggestions((currentSuggestions) =>
+        currentSuggestions.filter((s) => s.id !== suggestion.id)
+      );
     }
+  };
+
+  const handleSaveReview = async ({ rating, review }) => {
+    if (!movieToReview) return;
+    await supabase.from("movie_watch_history").insert({
+      user_id: user.id,
+      party_id: party.id,
+      movie_tmdb_id: movieToReview.id,
+      movie_title: movieToReview.title,
+      movie_image_url: movieToReview.imageUrl,
+      watched_at: new Date().toISOString(),
+      rating,
+      review,
+    });
+    setMovieToReview(null);
+  };
+
+  const handleAddToFavorites = async () => {
+    if (!movieToReview) return;
+    alert(
+      `Adding ${movieToReview.title} to favorites! (feature to be fully connected)`
+    );
+    setMovieToReview(null);
   };
 
   if (loading)
@@ -529,17 +492,16 @@ const ConductorDashboard = ({ partyId, onBack }) => {
   if (!party)
     return <div className="text-center text-white pt-40">Party not found.</div>;
 
-  const formatTimer = (seconds) =>
-    `${Math.floor(seconds / 60)}:${("0" + (seconds % 60)).slice(-2)}`;
-
-  const sortedPollMovies = [...(party?.poll_movies || [])].sort((a, b) => {
-    const votesA = pollVoteCounts[a.id] || 0;
-    const votesB = pollVoteCounts[b.id] || 0;
-    return votesB - votesA;
-  });
-
   return (
-    <div className="bg-gray-900 min-h-screen pt-24 pb-12">
+    <>
+      {movieToReview && (
+        <ReviewMovieModal
+          movie={movieToReview}
+          onSave={handleSaveReview}
+          onClose={() => setMovieToReview(null)}
+          onAddToFavorites={handleAddToFavorites}
+        />
+      )}
       {showCrashConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl">
@@ -609,74 +571,78 @@ const ConductorDashboard = ({ partyId, onBack }) => {
           </div>
         </div>
       )}
-      <div className="container mx-auto px-4">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
-        >
-          <ArrowLeft size={20} /> Back to Hub
-        </button>
-        {error && (
-          <div className="bg-red-500/20 text-red-400 p-3 rounded-lg mb-6 text-center">
-            {error}
-          </div>
-        )}
-        <div className="bg-gray-800 rounded-xl shadow-lg p-8">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-1 space-y-6">
-              <WatchList
-                watchedMovies={watchedMovieDetails}
-                nowPlaying={nowPlayingMovieDetails}
-                upNext={upNextMovie}
-                onRemoveWatched={handleRemoveFromWatched}
-                onMarkWatched={handleMarkAsWatched}
-                onSkipMovie={handleSkipMovie}
-                isConductor={handleConductorCheck}
-                playState={party.party_state?.status}
-                intermissionTime={intermissionTime}
-              />
-              <ViewersList viewers={party.watching_users} />
+
+      <div className="bg-gray-900 min-h-screen pt-24 pb-12">
+        <div className="container mx-auto px-4">
+          <button
+            onClick={() => navigate("/conductors")}
+            className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
+          >
+            <ArrowLeft size={20} /> Back to Hub
+          </button>
+          {error && (
+            <div className="bg-red-500/20 text-red-400 p-3 rounded-lg mb-6 text-center">
+              {error}
             </div>
-            <div className="md:col-span-2 space-y-8">
-              <DashboardControls
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onCrashParty={handleCrashParty}
-                onSetIntermission={handleStartIntermission}
-                customIntermissionMinutes={customIntermissionMinutes}
-                setCustomIntermissionMinutes={setCustomIntermissionMinutes}
-                playState={party.party_state?.status}
-                isVotingOpen={party.voting_open}
-              />
-              <MoviePoll
-                movies={party.poll_movies}
-                voteCounts={pollVoteCounts}
-                onOpenPoll={handleOpenPoll}
-                onClosePoll={handleClosePoll}
-                onRemoveFromPoll={handleRemoveFromPoll}
-                onAddMovie={handleAddMovieToPoll}
-                isVotingOpen={party.voting_open}
-                isAddingToPoll={isAddingToPoll}
-                setIsAddingToPoll={setIsAddingToPoll}
-                SearchComponent={(props) => (
-                  <MovieSearchInput
-                    {...props}
-                    existingIds={[
-                      ...party.poll_movies.map((m) => m.id),
-                      party.now_playing_tmdb_id,
-                    ]}
-                  />
-                )}
-              />
-              <ViewerSuggestions
-                suggestions={suggestions}
-                onMoveToPoll={handleMoveSuggestionToPoll}
-              />
+          )}
+
+          <div className="bg-gray-800 rounded-xl shadow-lg p-8">
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="md:col-span-1 space-y-6">
+                <WatchList
+                  watchedMovies={watchedMovieDetails}
+                  nowPlaying={nowPlayingMovieDetails}
+                  upNext={upNextMovie}
+                  onMarkWatched={() => handleFinishMovie("watched")}
+                  onSkipMovie={() => handleFinishMovie("skipped")}
+                  playState={party.party_state?.status}
+                  intermissionTime={intermissionTime}
+                  isConductor={true}
+                />
+                <ViewersList viewers={viewers} />
+              </div>
+              <div className="md:col-span-2 space-y-8">
+                <DashboardControls
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onCrashParty={handleCrashParty}
+                  onSetIntermission={handleStartIntermission}
+                  onEndIntermission={handleEndIntermission}
+                  customIntermissionMinutes={customIntermissionMinutes}
+                  setCustomIntermissionMinutes={setCustomIntermissionMinutes}
+                  playState={party.party_state?.status}
+                  isVotingOpen={party.voting_open}
+                />
+                <MoviePoll
+                  movies={party.poll_movies}
+                  voteCounts={pollVoteCounts}
+                  onOpenPoll={handleOpenPoll}
+                  onClosePoll={handleClosePoll}
+                  onRemoveFromPoll={handleRemoveFromPoll}
+                  onAddMovie={handleAddMovieToPoll}
+                  isVotingOpen={party.voting_open}
+                  isAddingToPoll={isAddingToPoll}
+                  setIsAddingToPoll={setIsAddingToPoll}
+                  SearchComponent={(props) => (
+                    <MovieSearchInput
+                      {...props}
+                      existingIds={[
+                        ...party.poll_movies.map((m) => m.id),
+                        party.now_playing_tmdb_id,
+                      ]}
+                    />
+                  )}
+                />
+                <ViewerSuggestions
+                  suggestions={suggestions}
+                  onMoveToPoll={handleMoveSuggestionToPoll}
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

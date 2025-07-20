@@ -1,73 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
 import {
   ArrowLeft,
   Users,
-  Clapperboard,
-  Timer,
   Vote,
-  Film,
-  PlayCircle,
-  PauseCircle,
   Trash2,
   Search,
   PlusCircle,
 } from "lucide-react";
-import WatchList from "./WatchList"; // Assuming WatchList.jsx is in the same directory
-
-// --- TMDB API Helper ---
-const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
-const tmdbBaseUrl = "https://api.themoviedb.org/3";
-const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
-
-const getMovieDetails = async (movieId) => {
-  if (!movieId) return null;
-  try {
-    const response = await fetch(
-      `${tmdbBaseUrl}/movie/${movieId}?api_key=${tmdbApiKey}`
-    );
-    if (!response.ok) throw new Error("Failed to fetch movie details");
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.title,
-      year: data.release_date ? data.release_date.split("-")[0] : "N/A",
-      imageUrl: data.poster_path
-        ? `${tmdbImageUrl}${data.poster_path}`
-        : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
-      runtime: data.runtime || 0,
-    };
-  } catch (error) {
-    console.error("Error fetching movie details:", error);
-    return null;
-  }
-};
-
-const searchTMDb = async (query) => {
-  if (!query) return [];
-  try {
-    const response = await fetch(
-      `${tmdbBaseUrl}/search/movie?api_key=${tmdbApiKey}&query=${encodeURIComponent(
-        query
-      )}`
-    );
-    if (!response.ok) throw new Error("Failed to fetch from TMDB");
-    const data = await response.json();
-    return data.results.slice(0, 5).map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      year: movie.release_date ? movie.release_date.split("-")[0] : "N/A",
-      imageUrl: movie.poster_path
-        ? `${tmdbImageUrl}${movie.poster_path}`
-        : "https://placehold.co/100x150/1a202c/ffffff?text=No+Image",
-    }));
-  } catch (error) {
-    console.error("Error searching TMDB:", error);
-    return [];
-  }
-};
-// --- End TMDB API Helper ---
+import { getMovieDetails, searchTMDb } from "../api/tmdb";
+import ReviewMovieModal from "./ReviewMovieModal";
+import WatchList from "./WatchList";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -120,11 +65,6 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
                 src={movie.imageUrl}
                 alt={movie.title}
                 className="w-10 h-16 object-cover rounded"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src =
-                    "https://placehold.co/40x60/1a202c/ffffff?text=Err";
-                }}
               />
               <span>
                 {movie.title} ({movie.year})
@@ -137,24 +77,26 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   );
 };
 
-const ViewWatchParty = ({ partyId, onBack }) => {
+const ViewWatchParty = () => {
+  const { partyId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
+
   const [party, setParty] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [viewers, setViewers] = useState([]);
   const [watchedMovieDetails, setWatchedMovieDetails] = useState([]);
   const [nowPlayingMovieDetails, setNowPlayingMovieDetails] = useState(null);
   const [upNextMovieDetails, setUpNextMovieDetails] = useState(null);
-  const [viewers, setViewers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [userVotes, setUserVotes] = useState([]);
   const [pollVoteCounts, setPollVoteCounts] = useState({});
   const [suggestions, setSuggestions] = useState([]);
   const [userSuggestionCount, setUserSuggestionCount] = useState(0);
-
-  const prevVotingOpen = useRef(party?.voting_open);
-
-  const remainingVotes = 3 - userVotes.length;
-  const remainingSuggestions = 2 - userSuggestionCount;
+  const [movieToReview, setMovieToReview] = useState(null);
+  const prevMoviesWatchedRef = useRef([]);
+  const [intermissionTime, setIntermissionTime] = useState(0);
+  const prevVotingOpen = useRef();
 
   const refreshVoteData = useCallback(async () => {
     if (!partyId || !user) return;
@@ -169,7 +111,6 @@ const ViewWatchParty = ({ partyId, onBack }) => {
         }, {})
       : {};
     setPollVoteCounts(counts);
-
     const { data: userVotesData } = await supabase
       .from("votes")
       .select("id, movie_tmdb_id")
@@ -182,39 +123,116 @@ const ViewWatchParty = ({ partyId, onBack }) => {
     );
   }, [partyId, user]);
 
-  const refreshViewerData = useCallback(async () => {
-    if (!partyId) return;
-    const { data, error } = await supabase
-      .from("party_viewers")
-      .select("user_id, username")
-      .eq("party_id", partyId);
-    if (error) {
-      console.error("Error refreshing viewer data:", error);
-    } else {
-      setViewers(data || []);
-    }
-  }, [partyId]);
-
   const refreshSuggestionData = useCallback(async () => {
     if (!partyId || !user) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("suggestions")
       .select("*")
       .eq("party_id", partyId);
-    if (error) {
-      console.error("Error refreshing suggestions:", error);
-    } else if (data) {
+    if (data) {
       setSuggestions(data);
       setUserSuggestionCount(data.filter((s) => s.user_id === user.id).length);
     }
   }, [partyId, user]);
 
   useEffect(() => {
+    const currentVotingOpen = party?.voting_open;
+
+    // Check if the poll just opened (i.e., it was previously false and is now true)
+    if (currentVotingOpen && !prevVotingOpen.current) {
+      const resetUserVotes = async () => {
+        if (!user || !partyId) return;
+
+        // Delete all of the current user's votes for this party from the database
+        await supabase
+          .from("votes")
+          .delete()
+          .match({ user_id: user.id, party_id: partyId });
+
+        // After deleting, refresh the local vote state to update the UI
+        refreshVoteData();
+      };
+
+      resetUserVotes();
+    }
+
+    // Update the ref with the current value for the next render
+    prevVotingOpen.current = currentVotingOpen;
+  }, [party?.voting_open, partyId, user, refreshVoteData]);
+
+  // --- UPDATED useEffect for debugging Vote and Suggestion Subscriptions ---
+  useEffect(() => {
     if (!partyId || !user) return;
 
-    // Subscriptions setup
-    const partyChannel = supabase
-      .channel(`public:watch_parties:id=eq.${partyId}`)
+    // Dedicated channel for votes
+    const votesSubscription = supabase
+      .channel(`party-votes:${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "votes",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("VIEWER SIDE: Vote change received!", payload);
+          refreshVoteData();
+        }
+      )
+      .subscribe();
+
+    // Dedicated channel for suggestions
+    const suggestionsSubscription = supabase
+      .channel(`party-suggestions:${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "suggestions",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("VIEWER SIDE: Suggestion change received!", payload);
+          refreshSuggestionData();
+        }
+      )
+      .subscribe();
+
+    // Cleanup function to remove the subscriptions
+    return () => {
+      supabase.removeChannel(votesSubscription);
+      supabase.removeChannel(suggestionsSubscription);
+    };
+  }, [partyId, user, refreshVoteData, refreshSuggestionData]);
+
+  useEffect(() => {
+    if (!partyId || !user) return;
+
+    const fetchInitialData = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("watch_parties")
+        .select("*")
+        .eq("id", partyId)
+        .single();
+      if (error) {
+        setError("Failed to load party details.");
+        setLoading(false);
+      } else {
+        setParty(data);
+        await Promise.all([refreshVoteData(), refreshSuggestionData()]);
+        setLoading(false);
+      }
+    };
+    fetchInitialData();
+
+    const partyChannel = supabase.channel(`party:${partyId}`, {
+      config: { presence: { key: user.id } },
+    });
+
+    partyChannel
       .on(
         "postgres_changes",
         {
@@ -225,152 +243,92 @@ const ViewWatchParty = ({ partyId, onBack }) => {
         },
         (payload) => setParty(payload.new)
       )
-      .subscribe();
-    const votesChannel = supabase
-      .channel(`party-votes-${partyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "votes",
-          filter: `party_id=eq.${partyId}`,
-        },
-        refreshVoteData
-      )
-      .subscribe();
-    const suggestionsChannel = supabase
-      .channel(`party-suggestions-${partyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "suggestions",
-          filter: `party_id=eq.${partyId}`,
-        },
-        refreshSuggestionData
-      )
-      .subscribe();
-    const viewersChannel = supabase
-      .channel(`party-viewers-${partyId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "party_viewers",
-          filter: `party_id=eq.${partyId}`,
-        },
-        refreshViewerData
-      )
-      .subscribe();
+      .on("presence", { event: "sync" }, () => {
+        const presenceState = partyChannel.presenceState();
+        const currentViewers = Object.values(presenceState)
+          .map((p) => p[0])
+          .filter((p) => p.username);
+        currentViewers.sort(
+          (a, b) => (b.is_conductor ? 1 : 0) - (a.is_conductor ? 1 : 0)
+        );
+        setViewers(currentViewers);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await partyChannel.track({
+            user_id: user.id,
+            username: user.user_metadata?.username || "Anonymous",
+            is_conductor: false,
+          });
+        }
+      });
 
     return () => {
       supabase.removeChannel(partyChannel);
-      supabase.removeChannel(votesChannel);
-      supabase.removeChannel(suggestionsChannel);
-      supabase.removeChannel(viewersChannel);
     };
-  }, [
-    partyId,
-    user,
-    refreshVoteData,
-    refreshSuggestionData,
-    refreshViewerData,
-  ]);
+  }, [partyId, user, refreshVoteData, refreshSuggestionData]);
 
   useEffect(() => {
-    const currentVotingOpen = party?.voting_open;
-    if (currentVotingOpen && !prevVotingOpen.current) {
-      const resetUserVotes = async () => {
-        if (!user || !partyId) return;
-        const { error } = await supabase
-          .from("votes")
-          .delete()
-          .match({ user_id: user.id, party_id: partyId });
-
-        if (!error) {
-          console.log(
-            "User votes reset, manually refreshing state for instant update."
-          );
-          await refreshVoteData(); // Manually refresh state after deleting votes
-        } else {
-          console.error("Failed to reset user votes on new poll:", error);
-        }
-      };
-      resetUserVotes();
+    if (
+      party?.party_state?.status !== "intermission" ||
+      !party.party_state.ends_at
+    ) {
+      setIntermissionTime(0);
+      return;
     }
-    prevVotingOpen.current = currentVotingOpen;
-  }, [party?.voting_open, partyId, user, refreshVoteData]);
+    const endsAt = new Date(party.party_state.ends_at).getTime();
+    const intervalId = setInterval(() => {
+      const remaining = Math.round(
+        (new Date(endsAt).getTime() - new Date().getTime()) / 1000
+      );
+      if (remaining > 0) setIntermissionTime(remaining);
+      else {
+        setIntermissionTime(0);
+        clearInterval(intervalId);
+      }
+    }, 1000);
+    const initialRemaining = Math.round((endsAt - new Date().getTime()) / 1000);
+    setIntermissionTime(initialRemaining > 0 ? initialRemaining : 0);
+    return () => clearInterval(intervalId);
+  }, [party?.party_state]);
 
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!partyId || !user) return;
-      setLoading(true);
-
-      // Join the party first
-      await supabase
-        .from("party_viewers")
-        .insert(
-          {
-            party_id: partyId,
-            user_id: user.id,
-            username: user.user_metadata?.username || "Anonymous",
-          },
-          { onConflict: "party_id, user_id" }
-        );
-
-      // Then fetch all necessary data for the initial render
-      const { data: partyData, error: partyError } = await supabase
-        .from("watch_parties")
-        .select("*")
-        .eq("id", partyId)
-        .single();
-
-      if (partyError) {
-        setError("Failed to load party details.");
-        setLoading(false);
-        return;
+    if (
+      party?.movies_watched &&
+      party.movies_watched.length > (prevMoviesWatchedRef.current?.length || 0)
+    ) {
+      const newWatchedMovie =
+        party.movies_watched[party.movies_watched.length - 1];
+      if (newWatchedMovie?.status === "watched") {
+        const fetchAndSetReviewMovie = async () => {
+          const movieDetails = await getMovieDetails(newWatchedMovie.id);
+          if (movieDetails) setMovieToReview(movieDetails);
+        };
+        fetchAndSetReviewMovie();
       }
-      setParty(partyData);
-
-      // Fetch all other data required for the initial view
-      await Promise.all([
-        refreshVoteData(),
-        refreshSuggestionData(),
-        refreshViewerData(),
-      ]);
-
-      setLoading(false);
-    };
-    fetchInitialData();
-  }, [
-    partyId,
-    user,
-    refreshVoteData,
-    refreshSuggestionData,
-    refreshViewerData,
-  ]);
+    }
+    prevMoviesWatchedRef.current = party?.movies_watched;
+  }, [party?.movies_watched]);
 
   useEffect(() => {
     const fetchAllMovieDetails = async () => {
       if (party) {
-        if (party.now_playing_tmdb_id)
-          setNowPlayingMovieDetails(
-            await getMovieDetails(party.now_playing_tmdb_id)
-          );
-        else setNowPlayingMovieDetails(null);
-
-        if (party.up_next_tmdb_id)
-          setUpNextMovieDetails(await getMovieDetails(party.up_next_tmdb_id));
-        else setUpNextMovieDetails(null);
-
+        setNowPlayingMovieDetails(
+          party.now_playing_tmdb_id
+            ? await getMovieDetails(party.now_playing_tmdb_id)
+            : null
+        );
+        setUpNextMovieDetails(
+          party.up_next_tmdb_id
+            ? await getMovieDetails(party.up_next_tmdb_id)
+            : null
+        );
         if (party.movies_watched?.length > 0) {
-          const movieDetailsPromises = party.movies_watched.map(async (info) =>
-            (await getMovieDetails(info.id))
-              ? { ...(await getMovieDetails(info.id)), status: info.status }
-              : null
+          const movieDetailsPromises = party.movies_watched.map(
+            async (info) => {
+              const details = await getMovieDetails(info.id);
+              return details ? { ...details, status: info.status } : null;
+            }
           );
           setWatchedMovieDetails(
             (await Promise.all(movieDetailsPromises)).filter(Boolean)
@@ -384,61 +342,67 @@ const ViewWatchParty = ({ partyId, onBack }) => {
   }, [party]);
 
   const handleVote = async (movieTmdbId) => {
-    if (remainingVotes <= 0) {
-      setError("You have no votes left.");
-      setTimeout(() => setError(""), 3000);
-      return;
-    }
-    const { error } = await supabase
-      .from("votes")
-      .insert({
-        party_id: partyId,
-        user_id: user.id,
-        movie_tmdb_id: movieTmdbId,
-      });
-    if (error) {
-      setError("Could not cast vote. Please try again.");
-      setTimeout(() => setError(""), 3000);
-    } else {
-      await refreshVoteData(); // Manually refresh state for instant UI update
-    }
+    if (userVotes.length >= 3) return;
+    await supabase.from("votes").insert({
+      party_id: partyId,
+      user_id: user.id,
+      movie_tmdb_id: movieTmdbId,
+    });
   };
 
   const handleRemoveVote = async (movieTmdbId) => {
     const voteToRemove = userVotes.find((v) => v.movieId === movieTmdbId);
-    if (!voteToRemove) return;
-    const { error } = await supabase
-      .from("votes")
-      .delete()
-      .eq("id", voteToRemove.voteId);
-    if (error) {
-      setError("Could not remove vote. Please try again.");
-      setTimeout(() => setError(""), 3000);
-    } else {
-      await refreshVoteData(); // Manually refresh state for instant UI update
-    }
+    if (voteToRemove)
+      await supabase.from("votes").delete().eq("id", voteToRemove.voteId);
   };
 
   const handleSuggestMovie = async (movie) => {
-    if (remainingSuggestions <= 0) {
-      setError("You have no suggestions left.");
-      setTimeout(() => setError(""), 3000);
-      return;
-    }
-    await supabase
-      .from("suggestions")
-      .insert({
-        party_id: partyId,
-        user_id: user.id,
-        movie_tmdb_id: movie.id,
-        movie_title: movie.title,
-        movie_year: movie.year,
-        movie_image_url: movie.imageUrl,
-      });
+    if (userSuggestionCount >= 2) return;
+    await supabase.from("suggestions").insert({
+      party_id: partyId,
+      user_id: user.id,
+      movie_tmdb_id: movie.id,
+      movie_title: movie.title,
+      movie_year: movie.year,
+      movie_image_url: movie.imageUrl,
+    });
   };
 
   const handleRemoveSuggestion = async (suggestionId) => {
-    await supabase.from("suggestions").delete().eq("id", suggestionId);
+    // Try to delete the suggestion from the database
+    const { error } = await supabase
+      .from("suggestions")
+      .delete()
+      .eq("id", suggestionId);
+
+    // If the deletion was successful, update the local UI immediately
+    if (!error) {
+      // Re-fetch the data to ensure counts are accurate
+      refreshSuggestionData();
+    }
+  };
+
+  const handleSaveReview = async ({ rating, review }) => {
+    if (!movieToReview) return;
+    await supabase.from("movie_watch_history").insert({
+      user_id: user.id,
+      party_id: party.id,
+      movie_tmdb_id: movieToReview.id,
+      movie_title: movieToReview.title,
+      movie_image_url: movieToReview.imageUrl,
+      watched_at: new Date().toISOString(),
+      rating,
+      review,
+    });
+    setMovieToReview(null);
+  };
+
+  const handleAddToFavorites = async () => {
+    if (!movieToReview) return;
+    alert(
+      `Adding ${movieToReview.title} to favorites! (feature to be fully connected)`
+    );
+    setMovieToReview(null);
   };
 
   if (loading)
@@ -453,171 +417,185 @@ const ViewWatchParty = ({ partyId, onBack }) => {
   const sortedPollMovies = [...(party?.poll_movies || [])].sort(
     (a, b) => (pollVoteCounts[b.id] || 0) - (pollVoteCounts[a.id] || 0)
   );
+  const remainingVotes = 3 - userVotes.length;
+  const remainingSuggestions = 2 - userSuggestionCount;
 
   return (
-    <div className="bg-gray-900 min-h-screen pt-24 pb-12">
-      <div className="container mx-auto px-4">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
-        >
-          <ArrowLeft size={20} /> Back to Hub
-        </button>
-
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-white">
-            {party.party_name}
-          </h1>
-          <p className="text-lg text-gray-400 pt-2">
-            Conducted by{" "}
-            <span className="font-semibold text-indigo-400">
-              {party.conductor_username}
-            </span>
-          </p>
-        </div>
-
-        <div className="bg-gray-800 rounded-xl shadow-lg p-8">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-1 space-y-6">
-              <WatchList
-                watchedMovies={watchedMovieDetails}
-                nowPlaying={nowPlayingMovieDetails}
-                upNext={upNextMovieDetails}
-                playState={party?.party_state?.status}
-                intermissionTime={party?.party_state?.intermission_time || 0}
-                isConductor={user.id === party.conductor_id}
-                onMarkWatched={() => console.log("Marking as watched")}
-                onSkipMovie={() => console.log("Skipping movie")}
-                onRemoveWatched={(index) =>
-                  console.log("Removing watched movie at index:", index)
-                }
-              />
-              <div className="bg-gray-900 p-4 rounded-lg">
-                <h3 className="font-bold text-white mb-2 flex items-center gap-2">
-                  <Users size={20} /> Viewers ({viewers.length})
-                </h3>
-                <ul className="space-y-1 text-gray-300">
-                  {viewers.map((viewer) => (
-                    <li key={viewer.user_id}>{viewer.username}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 space-y-8">
-              <div className="bg-gray-900 p-4 rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-white flex items-center gap-2">
-                    <Vote size={20} /> Movie Poll
+    <>
+      {movieToReview && (
+        <ReviewMovieModal
+          movie={movieToReview}
+          onSave={handleSaveReview}
+          onClose={() => setMovieToReview(null)}
+          onAddToFavorites={handleAddToFavorites}
+        />
+      )}
+      <div className="bg-gray-900 min-h-screen pt-24 pb-12">
+        <div className="container mx-auto px-4">
+          <button
+            onClick={() => navigate("/conductors")}
+            className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
+          >
+            <ArrowLeft size={20} /> Back to Hub
+          </button>
+          <div className="text-center mb-8">
+            <h1 className="text-4xl md:text-5xl font-extrabold text-white">
+              {party.party_name}
+            </h1>
+            <p className="text-lg text-gray-400 pt-2">
+              Conducted by{" "}
+              <span className="font-semibold text-indigo-400">
+                {party.conductor_username}
+              </span>
+            </p>
+          </div>
+          <div className="bg-gray-800 rounded-xl shadow-lg p-8">
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="md:col-span-1 space-y-6">
+                <WatchList
+                  watchedMovies={watchedMovieDetails}
+                  nowPlaying={nowPlayingMovieDetails}
+                  upNext={upNextMovieDetails}
+                  playState={party?.party_state?.status}
+                  intermissionTime={intermissionTime}
+                  isConductor={user.id === party.conductor_id}
+                />
+                <div className="bg-gray-900 p-4 rounded-lg">
+                  <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                    <Users size={20} /> Viewers ({viewers.length})
                   </h3>
-                  <span className="text-indigo-400 font-semibold">
-                    {remainingVotes} {remainingVotes === 1 ? "Vote" : "Votes"}{" "}
-                    Left
-                  </span>
-                </div>
-                {party.voting_open ? (
-                  <ul className="space-y-2">
-                    {sortedPollMovies.map((movie) => (
+                  <ul className="space-y-1">
+                    {viewers.map((viewer) => (
                       <li
-                        key={movie.id}
+                        key={viewer.user_id}
+                        className={
+                          viewer.is_conductor
+                            ? "font-bold text-indigo-400"
+                            : "text-gray-300"
+                        }
+                      >
+                        {viewer.username}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="md:col-span-2 space-y-8">
+                <div className="bg-gray-900 p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                      <Vote size={20} /> Movie Poll
+                    </h3>
+                    <span className="text-indigo-400 font-semibold">
+                      {remainingVotes} {remainingVotes === 1 ? "Vote" : "Votes"}{" "}
+                      Left
+                    </span>
+                  </div>
+                  {party.voting_open ? (
+                    <ul className="space-y-2">
+                      {sortedPollMovies.map((movie) => (
+                        <li
+                          key={movie.id}
+                          className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-4">
+                            <img
+                              src={movie.imageUrl}
+                              alt={movie.title}
+                              className="w-10 h-16 object-cover rounded"
+                            />
+                            <span className="text-gray-300">
+                              {movie.title} ({movie.year})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="font-bold text-white">
+                              {pollVoteCounts[movie.id] || 0} Votes
+                            </span>
+                            {userVotes.some((v) => v.movieId === movie.id) && (
+                              <button
+                                onClick={() => handleRemoveVote(movie.id)}
+                                className="bg-red-600 text-white font-bold p-2 rounded-full transition hover:bg-red-700"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleVote(movie.id)}
+                              disabled={remainingVotes <= 0}
+                              className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                            >
+                              Vote
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-400 text-center py-4">
+                      The poll is currently closed.
+                    </p>
+                  )}
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                      <PlusCircle size={20} /> Suggestions
+                    </h3>
+                    <span className="text-indigo-400 font-semibold">
+                      {remainingSuggestions}{" "}
+                      {remainingSuggestions === 1
+                        ? "Suggestion"
+                        : "Suggestions"}{" "}
+                      Left
+                    </span>
+                  </div>
+                  <ul className="space-y-2 mb-4">
+                    {suggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id}
                         className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
                       >
                         <div className="flex items-center gap-4">
                           <img
-                            src={movie.imageUrl}
-                            alt={movie.title}
+                            src={suggestion.movie_image_url}
+                            alt={suggestion.movie_title}
                             className="w-10 h-16 object-cover rounded"
                           />
                           <span className="text-gray-300">
-                            {movie.title} ({movie.year})
+                            {suggestion.movie_title} ({suggestion.movie_year})
                           </span>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold text-white">
-                            {pollVoteCounts[movie.id] || 0} Votes
-                          </span>
-                          {userVotes.some((v) => v.movieId === movie.id) && (
-                            <button
-                              onClick={() => handleRemoveVote(movie.id)}
-                              className="bg-red-600 text-white font-bold p-2 rounded-full transition hover:bg-red-700"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
+                        {suggestion.user_id === user.id && (
                           <button
-                            onClick={() => handleVote(movie.id)}
-                            disabled={remainingVotes <= 0}
-                            className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                            onClick={() =>
+                              handleRemoveSuggestion(suggestion.id)
+                            }
+                            className="p-2 text-gray-500 hover:text-red-500"
                           >
-                            Vote
+                            <Trash2 size={16} />
                           </button>
-                        </div>
+                        )}
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p className="text-gray-400 text-center py-4">
-                    The poll is currently closed.
-                  </p>
-                )}
-                {error && (
-                  <p className="text-red-400 text-center mt-4">{error}</p>
-                )}
-              </div>
-              <div className="bg-gray-900 p-4 rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-white flex items-center gap-2">
-                    <PlusCircle size={20} /> Suggestions
-                  </h3>
-                  <span className="text-indigo-400 font-semibold">
-                    {remainingSuggestions}{" "}
-                    {remainingSuggestions === 1 ? "Suggestion" : "Suggestions"}{" "}
-                    Left
-                  </span>
+                  {remainingSuggestions > 0 && (
+                    <MovieSearchInput
+                      onSelect={handleSuggestMovie}
+                      existingIds={[
+                        ...(party?.poll_movies || []).map((m) => m.id),
+                        ...suggestions.map((s) => s.movie_tmdb_id),
+                        party?.now_playing_tmdb_id,
+                      ].filter(Boolean)}
+                    />
+                  )}
                 </div>
-                <ul className="space-y-2 mb-4">
-                  {suggestions.map((suggestion) => (
-                    <li
-                      key={suggestion.id}
-                      className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={suggestion.movie_image_url}
-                          alt={suggestion.movie_title}
-                          className="w-10 h-16 object-cover rounded"
-                        />
-                        <span className="text-gray-300">
-                          {suggestion.movie_title} ({suggestion.movie_year})
-                        </span>
-                      </div>
-                      {suggestion.user_id === user.id && (
-                        <button
-                          onClick={() => handleRemoveSuggestion(suggestion.id)}
-                          className="p-2 text-gray-500 hover:text-red-500"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                {remainingSuggestions > 0 && (
-                  <MovieSearchInput
-                    onSelect={handleSuggestMovie}
-                    existingIds={[
-                      ...(party?.poll_movies || []).map((m) => m.id),
-                      ...suggestions.map((s) => s.movie_tmdb_id),
-                      party?.now_playing_tmdb_id,
-                    ].filter(Boolean)}
-                  />
-                )}
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
