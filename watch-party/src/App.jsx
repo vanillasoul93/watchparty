@@ -56,7 +56,7 @@ const AppContent = () => {
         {/* Routes with Navbar and Footer */}
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/conductors" element={<ConductorsPage />} />
+          <Route path="/conductor-hub" element={<ConductorsPage />} />
           <Route path="/create-party" element={<CreateWatchParty />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>

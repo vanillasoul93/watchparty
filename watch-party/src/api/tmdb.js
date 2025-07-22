@@ -49,7 +49,7 @@ export const searchTMDb = async (query) => {
     const data = await response.json();
     // Fetch detailed results for the top 5 search hits to ensure consistent data shape
     const detailedResults = await Promise.all(
-      data.results.slice(0, 5).map((movie) => getMovieDetails(movie.id))
+      data.results.slice(0, 15).map((movie) => getMovieDetails(movie.id))
     );
     return detailedResults.filter(Boolean); // Filter out any nulls from failed fetches
   } catch (error) {

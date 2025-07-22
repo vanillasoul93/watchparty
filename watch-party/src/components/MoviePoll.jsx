@@ -6,6 +6,7 @@ const MoviePoll = ({
   voteCounts,
   onOpenPoll,
   onClosePoll,
+  onCancelPoll, // Accept the new prop
   onRemoveFromPoll,
   onAddMovie,
   isVotingOpen,
@@ -29,29 +30,40 @@ const MoviePoll = ({
           {!isVotingOpen && movies?.length < 10 && (
             <button
               onClick={() => setIsAddingToPoll(true)}
-              className="bg-gray-600 p-2 rounded-md text-sm font-semibold hover:bg-gray-700"
+              className="bg-gray-600 p-2 rounded-md text-green-400 text-sm font-semibold hover:bg-green-900"
             >
-              <PlusCircle size={16} />
+              <PlusCircle size={20} />
             </button>
           )}
           {isVotingOpen ? (
-            <button
-              onClick={onClosePoll}
-              className="bg-red-600 px-3 py-1 rounded-md text-sm font-semibold"
-            >
-              Close Poll
-            </button>
+            // --- MODIFIED: Show two buttons when poll is open ---
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onCancelPoll}
+                className="bg-gray-600 px-3 py-2 rounded-md text-amber-400 text-sm font-semibold hover:bg-yellow-900"
+              >
+                Cancel Poll
+              </button>
+              <button
+                onClick={onClosePoll}
+                className="bg-gray-600 px-3 py-2 rounded-md text-blue-400 text-sm font-semibold hover:bg-blue-900"
+              >
+                Close Poll
+              </button>
+            </div>
           ) : (
             <button
               onClick={onOpenPoll}
               disabled={!movies || movies.length === 0}
-              className="bg-blue-600 px-3 py-1 rounded-md text-sm font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed"
+              className="bg-gray-600 px-3 py-2 rounded-md text-sm text-blue-400 font-semibold hover:bg-blue-900 disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
               Open Poll
             </button>
           )}
         </div>
       </div>
+
+      {/* ... The rest of the component's JSX remains the same ... */}
       {isVotingOpen && (
         <p className="text-green-400 text-sm mb-3">
           Voting is now open for viewers!
@@ -74,11 +86,6 @@ const MoviePoll = ({
                   src={movie.imageUrl}
                   alt={movie.title}
                   className="w-10 h-16 object-cover rounded"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src =
-                      "https://placehold.co/40x60/1a202c/ffffff?text=Err";
-                  }}
                 />
                 <span className="text-gray-300">
                   {movie.title} ({movie.year})

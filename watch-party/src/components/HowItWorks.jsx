@@ -10,6 +10,7 @@ import {
   Instagram,
   Vote,
   User,
+  CircleQuestionMark,
 } from "lucide-react";
 
 export default function HowItWorks() {
@@ -27,32 +28,33 @@ export default function HowItWorks() {
                 <User size={32} />
               </div>
               <h3 className="text-2xl font-bold text-white mb-3">
-                1. Create or Join a Watch Party.
+                Conduct or Join a Watch Party
               </h3>
               <p className="text-gray-400">
-                Create your own Watch Party, even private ones with invite codes
-                or Join one of the Conductors parties.
+                Conduct your own Watch Party, Review your favorite movies with
+                your friends, or meet new people and join a room.
               </p>
             </div>
             <div className="bg-gray-900 p-8 rounded-xl shadow-lg transform hover:-translate-y-2 transition-transform duration-300">
               <div className="bg-indigo-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
                 <Vote size={32} />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3">2. Vote.</h3>
+              <h3 className="text-2xl font-bold text-white mb-3">Vote</h3>
               <p className="text-gray-400">
-                Vote for next up movies and for info on current movies.
+                Vote for movies when the conductor opens a poll to influence
+                what plays next!
               </p>
             </div>
             <div className="bg-gray-900 p-8 rounded-xl shadow-lg transform hover:-translate-y-2 transition-transform duration-300">
               <div className="bg-indigo-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
-                <Users size={32} />
+                <CircleQuestionMark size={32} />
               </div>
               <h3 className="text-2xl font-bold text-white mb-3">
-                3. Make Suggestions.
+                Make Suggestions
               </h3>
               <p className="text-gray-400">
-                Make movie suggestions for a chance to have your pick pulled by
-                the conductor.
+                Make movie suggestions for a chance to have your pick added to
+                the poll by the conductor.
               </p>
             </div>
           </div>

@@ -9,25 +9,32 @@ import MoviePoll from "./MoviePoll";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
 import ReviewMovieModal from "./ReviewMovieModal";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, LinkIcon } from "lucide-react";
+import { useDebounce } from "../hooks/useDebounce";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleSearch = async (e) => {
-    const query = e.target.value;
-    setSearchTerm(query);
-    if (query.length < 2) {
-      setResults([]);
-      return;
-    }
-    setLoading(true);
-    const searchResults = await searchTMDb(query);
-    setResults(searchResults.filter((res) => !existingIds.includes(res.id)));
-    setLoading(false);
-  };
+  // 2. Use the hook to create a debounced version of the search term.
+  // It will wait 500ms after the user stops typing before updating.
+  const debouncedSearchTerm = useDebounce(searchTerm, 250);
+
+  // 3. Create a useEffect that runs only when the DEBOUNCED term changes.
+  useEffect(() => {
+    const search = async () => {
+      if (debouncedSearchTerm.length < 2) {
+        setResults([]);
+        return;
+      }
+      setLoading(true);
+      const searchResults = await searchTMDb(debouncedSearchTerm);
+      setResults(searchResults.filter((res) => !existingIds.includes(res.id)));
+      setLoading(false);
+    };
+    search();
+  }, [debouncedSearchTerm]); // The API call is now driven by the debounced term
 
   const handleSelectMovie = (movie) => {
     onSelect(movie);
@@ -43,7 +50,7 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
       <input
         type="text"
         value={searchTerm}
-        onChange={handleSearch}
+        onChange={(e) => setSearchTerm(e.target.value)}
         className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
         placeholder="Search for a movie to add..."
       />
@@ -74,6 +81,53 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   );
 };
 
+const StreamLinkCard = ({ initialUrl, onUpdate }) => {
+  const [url, setUrl] = useState(initialUrl || "");
+  const [isEditing, setIsEditing] = useState(false);
+
+  const handleUpdate = () => {
+    onUpdate(url);
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="bg-gray-900 p-6 rounded-lg">
+      <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+        <LinkIcon size={20} /> Stream Link
+      </h3>
+      {isEditing ? (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2"
+            placeholder="https://..."
+          />
+          <button
+            onClick={handleUpdate}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
+          >
+            Save
+          </button>
+        </div>
+      ) : (
+        <div className="flex justify-between items-center">
+          <p className="text-indigo-400 font-mono text-sm truncate">
+            {url || "No link set"}
+          </p>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg"
+          >
+            {url ? "Edit" : "Set Link"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ConductorDashboard = () => {
   const { partyId } = useParams();
   const navigate = useNavigate();
@@ -98,6 +152,11 @@ const ConductorDashboard = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [movieToReview, setMovieToReview] = useState(null);
   const prevMoviesWatchedRef = useRef([]);
+  const [tiedMovies, setTiedMovies] = useState([]);
+
+  const handleUpdateStreamUrl = (newUrl) => {
+    updatePartyStatus({ stream_url: newUrl });
+  };
 
   useEffect(() => {
     userProfileRef.current = userProfile;
@@ -304,9 +363,24 @@ const ConductorDashboard = () => {
 
   const handlePlay = () => {
     if (nowPlayingMovieDetails) {
-      updatePartyStatus({ party_state: { status: "playing" } });
+      // If resuming a paused movie, calculate the time it was paused.
+      const paused_duration = party.last_pause_time
+        ? new Date().getTime() - new Date(party.last_pause_time).getTime()
+        : 0;
+
+      // Add the paused duration to the original start time to get the new effective start time.
+      const new_start_time = new Date(
+        new Date(party.playback_start_time).getTime() + paused_duration
+      );
+
+      updatePartyStatus({
+        party_state: { status: "playing" },
+        playback_start_time: new_start_time.toISOString(), // Set the new effective start time
+        last_pause_time: null, // Clear the pause time
+      });
       return;
     }
+
     if (upNextMovie) {
       const newPollList = party.poll_movies.filter(
         (movie) => movie.id !== upNextMovie.id
@@ -316,16 +390,21 @@ const ConductorDashboard = () => {
         poll_movies: newPollList,
         party_state: { status: "playing" },
         up_next_tmdb_id: null,
+        playback_start_time: new Date().toISOString(), // Set the initial start time
+        last_pause_time: null,
       });
       setUpNextMovie(null);
     } else {
-      setError("No movie is queued up. Please select one from the poll.");
+      setError("No movie is queued up.");
       setTimeout(() => setError(""), 5000);
     }
   };
 
   const handlePause = () => {
-    updatePartyStatus({ party_state: { status: "paused" } });
+    updatePartyStatus({
+      party_state: { status: "paused" },
+      last_pause_time: new Date().toISOString(), // Record the time it was paused
+    });
   };
 
   const handleFinishMovie = async (status) => {
@@ -394,33 +473,124 @@ const ConductorDashboard = () => {
   };
 
   const handleOpenPoll = () => {
+    // Reset the vote counts to zero before opening the new poll
+    setPollVoteCounts({});
+
+    // Then, open the poll
     updatePartyStatus({ voting_open: true });
   };
 
   const handleClosePoll = () => {
-    if (!party.poll_movies || party.poll_movies.length === 0) return;
+    if (!party.poll_movies || party.poll_movies.length === 0) {
+      alert("Poll canceled: The poll was empty.");
+      updatePartyStatus({ voting_open: false });
+      return;
+    }
+
     const totalVotes = Object.values(pollVoteCounts).reduce(
       (sum, count) => sum + count,
       0
     );
+
     if (totalVotes === 0) {
       setShowZeroVotesDialog(true);
       return;
     }
-    const winner = party.poll_movies.reduce((prev, current) => {
-      const prevVotes = pollVoteCounts[prev.id] || 0;
-      const currentVotes = pollVoteCounts[current.id] || 0;
-      return prevVotes >= currentVotes ? prev : current;
+
+    let highestVoteCount = 0;
+    let winners = [];
+    party.poll_movies.forEach((movie) => {
+      const voteCount = pollVoteCounts[movie.id] || 0;
+      if (voteCount > highestVoteCount) {
+        highestVoteCount = voteCount;
+        winners = [movie];
+      } else if (voteCount === highestVoteCount) {
+        winners.push(movie);
+      }
     });
+
+    if (winners.length === 1) {
+      const winner = winners[0];
+
+      // --- NEW LOGIC ---
+      // Start with the current poll list
+      let newPollList = [...party.poll_movies];
+      // If a movie is getting bumped from "Up Next", add it back to the poll
+      if (upNextMovie) {
+        newPollList.push(upNextMovie);
+      }
+      // Then, remove the new winner from the poll list
+      newPollList = newPollList.filter((movie) => movie.id !== winner.id);
+      // --- END NEW LOGIC ---
+
+      setUpNextMovie(winner);
+      updatePartyStatus({
+        voting_open: false,
+        up_next_tmdb_id: winner.id,
+        poll_movies: newPollList,
+      });
+    } else {
+      setTiedMovies(winners);
+    }
+    // Reset the vote counts to zero before opening the new poll
+    setPollVoteCounts({});
+  };
+
+  const handleManualSelect = (winner) => {
+    // Remove the selected winner from the poll list
+    const newPollList = party.poll_movies.filter(
+      (movie) => movie.id !== winner.id
+    );
+
+    // Set the winner as "Up Next"
     setUpNextMovie(winner);
-    updatePartyStatus({ voting_open: false, up_next_tmdb_id: winner.id });
+    updatePartyStatus({
+      voting_open: false,
+      up_next_tmdb_id: winner.id,
+      poll_movies: newPollList,
+    });
+
+    // Close the dialog
+    setShowZeroVotesDialog(false);
+  };
+
+  // This new function handles the conductor's choice from the tie-breaker modal
+  const handleTiebreakerSelect = (winner) => {
+    // --- NEW LOGIC ---
+    let newPollList = [...party.poll_movies];
+    if (upNextMovie) {
+      newPollList.push(upNextMovie);
+    }
+    newPollList = newPollList.filter((movie) => movie.id !== winner.id);
+    // --- END NEW LOGIC ---
+
+    setUpNextMovie(winner);
+    updatePartyStatus({
+      voting_open: false,
+      up_next_tmdb_id: winner.id,
+      poll_movies: newPollList,
+    });
+    setTiedMovies([]);
   };
 
   const handleSelectRandom = () => {
     const randomIndex = Math.floor(Math.random() * party.poll_movies.length);
     const randomMovie = party.poll_movies[randomIndex];
+
+    // --- NEW LOGIC ---
+    let newPollList = [...party.poll_movies];
+    if (upNextMovie) {
+      newPollList.push(upNextMovie);
+    }
+    newPollList = newPollList.filter((movie) => movie.id !== randomMovie.id);
+    // --- END NEW LOGIC ---
+
     setUpNextMovie(randomMovie);
-    updatePartyStatus({ voting_open: false, up_next_tmdb_id: randomMovie.id });
+    updatePartyStatus({
+      voting_open: false,
+      up_next_tmdb_id: randomMovie.id,
+      poll_movies: newPollList,
+    });
     setShowZeroVotesDialog(false);
   };
 
@@ -429,7 +599,14 @@ const ConductorDashboard = () => {
     handleCrashParty();
   };
 
-  const handleCancelPoll = () => {
+  const handleCancelPoll = async () => {
+    // 1. Delete all votes for this party from the database
+    await supabase.from("votes").delete().eq("party_id", partyId);
+
+    // 2. Reset the local vote counts in the UI
+    setPollVoteCounts({});
+
+    // 3. Update the party status to close the poll
     updatePartyStatus({ voting_open: false });
     setShowZeroVotesDialog(false);
   };
@@ -560,39 +737,94 @@ const ConductorDashboard = () => {
         </div>
       )}
       {showZeroVotesDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-4">
               No Votes Received
             </h2>
             <p className="text-gray-300 mb-6">
-              The poll has closed with zero votes. What would you like to do?
+              The poll closed with zero votes. Please select a movie from the
+              list or choose another option.
             </p>
-            <div className="space-y-3">
+
+            {/* --- NEW: List of movies to choose from --- */}
+            <div className="space-y-3 mb-6 max-h-140 overflow-y-auto pr-2">
+              {party.poll_movies.map((movie) => (
+                <button
+                  key={movie.id}
+                  onClick={() => handleManualSelect(movie)}
+                  className="w-full bg-gray-700 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg text-left flex items-center gap-4 transition-colors"
+                >
+                  <img
+                    src={movie.imageUrl}
+                    alt={movie.title}
+                    className="w-10 h-16 object-cover rounded"
+                  />
+                  <span>
+                    {movie.title} ({movie.year})
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <hr className="border-gray-600 mb-6" />
+
+            {/* Existing Options */}
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={handleSelectRandom}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+                className="bg-gray-600 hover:bg-blue-900 text-blue-400 font-bold py-2 px-4 rounded-lg"
               >
-                Select Random Movie
+                Random Movie
+              </button>
+              <button
+                onClick={handleReturnToPoll}
+                className="bg-gray-600 hover:bg-purple-900 text-purple-400 font-bold py-2 px-4 rounded-lg"
+              >
+                Return to Poll
               </button>
               <button
                 onClick={handleCancelPoll}
-                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
               >
                 Cancel Poll
               </button>
               <button
                 onClick={handleCrashFromDialog}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
+                className="bg-gray-600 hover:bg-red-900 text-red-400 font-bold py-2 px-4 rounded-lg"
               >
                 Crash Party
               </button>
-              <button
-                onClick={handleReturnToPoll}
-                className="w-full bg-transparent hover:bg-gray-700 text-gray-300 font-bold py-2 px-4 rounded-lg"
-              >
-                Return to Poll
-              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --- NEW Tiebreaker Modal --- */}
+      {tiedMovies.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">It's a Tie!</h2>
+            <p className="text-gray-300 mb-6">
+              Multiple movies received the highest number of votes. Please
+              select the winner.
+            </p>
+            <div className="space-y-3">
+              {tiedMovies.map((movie) => (
+                <button
+                  key={movie.id}
+                  onClick={() => handleTiebreakerSelect(movie)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg text-left flex items-center gap-4"
+                >
+                  <img
+                    src={movie.imageUrl}
+                    alt={movie.title}
+                    className="w-10 h-16 object-cover rounded"
+                  />
+                  <span>
+                    {movie.title} ({movie.year})
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -601,7 +833,7 @@ const ConductorDashboard = () => {
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
         <div className="container mx-auto px-4">
           <button
-            onClick={() => navigate("/conductors")}
+            onClick={() => navigate("/conductor-hub")}
             className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
           >
             <ArrowLeft size={20} /> Back to Hub
@@ -614,8 +846,9 @@ const ConductorDashboard = () => {
 
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid md:grid-cols-3 gap-8">
-              <div className="md:col-span-1 space-y-6">
+              <div className="md:col-span-1 flex justify-between flex-col space-y-6">
                 <WatchList
+                  party={party}
                   watchedMovies={watchedMovieDetails}
                   nowPlaying={nowPlayingMovieDetails}
                   upNext={upNextMovie}
@@ -626,9 +859,14 @@ const ConductorDashboard = () => {
                   intermissionTime={intermissionTime}
                   isConductor={true}
                 />
+
                 <ViewersList viewers={viewers} />
               </div>
               <div className="md:col-span-2 space-y-8">
+                <StreamLinkCard
+                  initialUrl={party.stream_url}
+                  onUpdate={handleUpdateStreamUrl}
+                />
                 <DashboardControls
                   onPlay={handlePlay}
                   onPause={handlePause}
@@ -645,6 +883,7 @@ const ConductorDashboard = () => {
                   voteCounts={pollVoteCounts}
                   onOpenPoll={handleOpenPoll}
                   onClosePoll={handleClosePoll}
+                  onCancelPoll={handleCancelPoll} // Add this line
                   onRemoveFromPoll={handleRemoveFromPoll}
                   onAddMovie={handleAddMovieToPoll}
                   isVotingOpen={party.voting_open}

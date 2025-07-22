@@ -1,48 +1,47 @@
 import React, { useState } from "react";
 import { Star, X } from "lucide-react";
 
-// A reusable StarRating component we can build right here
+// --- NEW and Improved StarRating Component ---
 const StarRating = ({ rating, setRating }) => {
+  const [hoverRating, setHoverRating] = useState(0);
+
   return (
-    <div className="flex items-center">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <div
-          key={star}
-          className="relative cursor-pointer"
-          onMouseLeave={() => {
-            /* Prevents flickering */
-          }}
-        >
-          <Star
-            size={40}
-            className="text-gray-600"
-            onClick={() => setRating(star)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.fill = "#f59e0b";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.fill = "none";
-            }}
-          />
+    <div className="flex items-center" onMouseLeave={() => setHoverRating(0)}>
+      {[1, 2, 3, 4, 5].map((starIndex) => {
+        const isFilled = (hoverRating || rating) >= starIndex;
+        const isHalf =
+          (hoverRating || rating) > starIndex - 1 &&
+          (hoverRating || rating) < starIndex;
+
+        return (
           <div
-            className="absolute top-0 left-0 h-full overflow-hidden"
-            style={{
-              width:
-                rating >= star
-                  ? "100%"
-                  : rating > star - 1
-                  ? `${(rating % 1) * 100}%`
-                  : "0%",
+            key={starIndex}
+            className="relative cursor-pointer"
+            // 1. Detect which half of the star is being hovered over
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const isLeftHalf = e.clientX - rect.left < rect.width / 2;
+              setHoverRating(isLeftHalf ? starIndex - 0.5 : starIndex);
             }}
+            // 2. Set the rating on click
+            onClick={() => setRating(hoverRating)}
           >
-            <Star
-              size={40}
-              className="text-amber-500"
-              style={{ fill: "#f59e0b" }}
-            />
+            <Star size={40} className="text-gray-600" />
+
+            {/* 3. This div handles the partial or full fill */}
+            <div
+              className="absolute top-0 left-0 h-full overflow-hidden"
+              style={{ width: isHalf ? "50%" : isFilled ? "100%" : "0%" }}
+            >
+              <Star
+                size={40}
+                className="text-amber-500"
+                style={{ fill: "#f59e0b" }}
+              />
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -52,12 +51,11 @@ const ReviewMovieModal = ({ movie, onSave, onClose, onAddToFavorites }) => {
   const [review, setReview] = useState("");
 
   const handleSave = () => {
-    // Pass the local state up to the parent component's save function
     onSave({ rating, review });
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl relative">
         <button
           onClick={onClose}

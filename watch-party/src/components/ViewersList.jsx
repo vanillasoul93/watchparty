@@ -7,9 +7,19 @@ const ViewersList = ({ viewers }) => {
       <h3 className="font-bold text-white mb-2 flex items-center gap-2">
         <Users size={20} /> Viewers ({viewers?.length || 0})
       </h3>
-      <ul className="space-y-1 text-gray-300">
+      <ul className="space-y-1">
         {viewers?.map((viewer) => (
-          <li key={viewer.userId}>{viewer.username}</li>
+          // The 'key' prop is added here
+          <li
+            key={viewer.user_id}
+            className={
+              viewer.is_conductor
+                ? "font-bold text-indigo-400"
+                : "text-gray-300"
+            }
+          >
+            {viewer.username}
+          </li>
         ))}
       </ul>
     </div>

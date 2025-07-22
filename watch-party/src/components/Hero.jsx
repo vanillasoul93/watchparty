@@ -40,7 +40,7 @@ export default function Hero({ setActiveLink }) {
               Create a Watch Party
             </button>
             <button
-              onClick={() => setActiveLink("Conductors")}
+              onClick={() => setActiveLink("Conductor Hub")}
               className="bg-transparent hover:bg-indigo-700 text-white font-bold border-4 border-indigo-600 w-1xl h-16 py-3 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-indigo-600/40"
             >
               Join a Watch Party

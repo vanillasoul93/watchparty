@@ -18,8 +18,11 @@ import {
   Timer,
   Trash2,
   Vote,
+  KeyRound,
+  UserCheck, // New Icon
 } from "lucide-react";
 
+// The PartyCard component remains the same
 const PartyCard = ({
   party,
   currentUser,
@@ -29,13 +32,12 @@ const PartyCard = ({
   isConcluded,
 }) => {
   const navigate = useNavigate();
-
   const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
   const [upNextDetails, setUpNextDetails] = useState(null);
   const [intermissionTime, setIntermissionTime] = useState(0);
 
   useEffect(() => {
-    if (isConcluded) return; // Don't fetch details for concluded cards
+    if (isConcluded) return;
     const fetchCardMovieDetails = async () => {
       setNowPlayingDetails(
         party.now_playing_tmdb_id
@@ -52,7 +54,7 @@ const PartyCard = ({
   }, [party.now_playing_tmdb_id, party.up_next_tmdb_id, isConcluded]);
 
   useEffect(() => {
-    if (isConcluded) return; // Don't run timer logic for concluded cards
+    if (isConcluded) return;
     if (
       party.party_state?.status === "intermission" &&
       party.party_state.ends_at
@@ -84,7 +86,6 @@ const PartyCard = ({
     isConductor &&
     party.end_time &&
     new Date() - new Date(party.end_time) < 3600000;
-
   const isPlaying = party.party_state?.status === "playing";
   const isIntermission = party.party_state?.status === "intermission";
 
@@ -124,8 +125,6 @@ const PartyCard = ({
             <span>{!isConcluded ? "Active" : "Concluded"}</span>
           </div>
         </div>
-
-        {/* --- Conditional Info Display --- */}
         {isConcluded ? (
           <div className="space-y-3 text-gray-300 mb-4">
             <div className="flex items-center gap-3">
@@ -164,7 +163,10 @@ const PartyCard = ({
                 <span>
                   {isPlaying ? "Playing: " : "Paused: "}
                   <span className="font-semibold text-white ml-1">
-                    {nowPlayingDetails?.title || "N/A"}
+                    {nowPlayingDetails?.title +
+                      " (" +
+                      nowPlayingDetails?.year +
+                      ")" || "N/A"}
                   </span>
                 </span>
               </div>
@@ -173,7 +175,7 @@ const PartyCard = ({
               <div className="flex items-center gap-3 bg-purple-500/20 text-purple-300 px-3 py-1 rounded-md">
                 <SkipForward size={18} />
                 <span className="font-semibold">
-                  Up Next: {upNextDetails.title}
+                  Up Next: {upNextDetails.title} ({upNextDetails.year})
                 </span>
               </div>
             )}
@@ -183,11 +185,8 @@ const PartyCard = ({
             </div>
           </div>
         )}
-
         <div className="mt-auto">
-          {/* --- Conditional Button Display --- */}
           {!isConcluded ? (
-            // Active Party Buttons
             isConductor ? (
               <div className="flex items-center gap-2">
                 <button
@@ -211,8 +210,7 @@ const PartyCard = ({
                 Join Party
               </button>
             )
-          ) : // Concluded Party Buttons
-          isConductor ? (
+          ) : isConductor ? (
             <div className="grid grid-cols-3 gap-2">
               {canReopen && (
                 <button
@@ -252,11 +250,18 @@ const PartyCard = ({
 
 const ConductorsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [activeParties, setActiveParties] = useState([]);
+  // --- NEW: State for the user's own parties ---
+  const [myActiveParties, setMyActiveParties] = useState([]);
+
+  const [activePublicParties, setActivePublicParties] = useState([]);
   const [concludedParties, setConcludedParties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [inviteCodeInput, setInviteCodeInput] = useState("");
+  const [joinError, setJoinError] = useState("");
 
   const fetchParties = async () => {
     setLoading(true);
@@ -265,107 +270,200 @@ const ConductorsPage = () => {
       .from("watch_parties")
       .select("*")
       .order("created_at", { ascending: false });
+
     if (error) {
       console.error("Error fetching parties:", error);
       setError(error.message);
     } else {
-      setActiveParties(data.filter((p) => p.status === "active"));
-      setConcludedParties(data.filter((p) => p.status === "concluded"));
+      // --- MODIFIED: Filter parties into three separate lists ---
+      const allActive = data.filter((p) => p.status === "active");
+
+      setMyActiveParties(allActive.filter((p) => p.conductor_id === user.id));
+      setActivePublicParties(
+        allActive.filter((p) => p.conductor_id !== user.id && p.is_public)
+      );
+      setConcludedParties(
+        data.filter((p) => p.status === "concluded" && p.is_public)
+      );
     }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchParties();
-  }, []);
+  }, [user]); // Add user to dependency array to refetch when user logs in
 
+  const handleJoinPrivateParty = async () => {
+    /* ... remains the same */
+  };
   const handleCrashParty = async (partyId) => {
-    const { error } = await supabase
-      .from("watch_parties")
-      .update({ status: "concluded", end_time: new Date().toISOString() })
-      .eq("id", partyId);
-    if (!error) fetchParties();
+    if (
+      !(
+        await supabase
+          .from("watch_parties")
+          .update({ status: "concluded", end_time: new Date().toISOString() })
+          .eq("id", partyId)
+      ).error
+    )
+      fetchParties();
   };
   const handleReopenParty = async (partyId) => {
-    const { error } = await supabase
-      .from("watch_parties")
-      .update({ status: "active", end_time: null })
-      .eq("id", partyId);
-    if (!error) fetchParties();
+    if (
+      !(
+        await supabase
+          .from("watch_parties")
+          .update({ status: "active", end_time: null })
+          .eq("id", partyId)
+      ).error
+    )
+      fetchParties();
   };
   const handleDeleteParty = async (partyId) => {
-    const { error } = await supabase
-      .from("watch_parties")
-      .delete()
-      .eq("id", partyId);
-    if (!error) fetchParties();
+    if (
+      !(await supabase.from("watch_parties").delete().eq("id", partyId)).error
+    )
+      fetchParties();
   };
 
-  if (loading) {
+  if (loading)
     return (
       <div className="text-center text-white pt-40">Loading parties...</div>
     );
-  }
-  if (error) {
+  if (error)
     return <div className="text-center text-red-500 pt-40">Error: {error}</div>;
-  }
 
   return (
-    <div className="bg-gray-900 min-h-screen pt-24 pb-12">
-      <div className="container mx-auto px-4">
-        <h1 className="text-5xl font-extrabold text-white text-center mb-12">
-          Conductor Hub
-        </h1>
-        <section>
-          <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-green-500 pl-4">
-            Active Now
-          </h2>
-          {activeParties.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {activeParties.map((party) => (
-                <PartyCard
-                  key={party.id}
-                  party={party}
-                  currentUser={user}
-                  onCrashParty={handleCrashParty}
-                  onReopenParty={handleReopenParty}
-                  onDeleteParty={handleDeleteParty}
-                  isConcluded={false}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400 bg-gray-800 p-6 rounded-lg">
-              No active watch parties at the moment. Why not start one?
+    <>
+      {showJoinModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">
+              Join Private Party
+            </h2>
+            <p className="text-gray-400 mb-6">
+              Enter the invite code below to join the party.
             </p>
-          )}
-        </section>
-        <section className="mt-16">
-          <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-gray-500 pl-4">
-            Recently Concluded
-          </h2>
-          {concludedParties.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {concludedParties.map((party) => (
-                <PartyCard
-                  key={party.id}
-                  party={party}
-                  currentUser={user}
-                  onCrashParty={handleCrashParty}
-                  onReopenParty={handleReopenParty}
-                  onDeleteParty={handleDeleteParty}
-                  isConcluded={true}
-                />
-              ))}
+            <input
+              type="text"
+              value={inviteCodeInput}
+              onChange={(e) => setInviteCodeInput(e.target.value)}
+              className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 text-center font-mono text-lg tracking-widest"
+              placeholder="A1B2C3"
+            />
+            {joinError && (
+              <p className="text-red-400 text-sm mt-2">{joinError}</p>
+            )}
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => setShowJoinModal(false)}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleJoinPrivateParty}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Join
+              </button>
             </div>
-          ) : (
-            <p className="text-gray-400 bg-gray-800 p-6 rounded-lg">
-              No recently concluded parties found.
-            </p>
-          )}
-        </section>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-gray-900 min-h-screen pt-24 pb-12">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-12">
+            <h1 className="text-5xl font-extrabold text-white">
+              Conductor Hub
+            </h1>
+            <button
+              onClick={() => setShowJoinModal(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+            >
+              <KeyRound size={20} /> Join Private Party
+            </button>
+          </div>
+
+          {/* --- NEW: "My Active Parties" Section --- */}
+          <section>
+            <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-indigo-500 pl-4 flex items-center gap-3">
+              <UserCheck size={28} /> Conducting
+            </h2>
+            {myActiveParties.length > 0 ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {myActiveParties.map((party) => (
+                  <PartyCard
+                    key={party.id}
+                    party={party}
+                    currentUser={user}
+                    onCrashParty={handleCrashParty}
+                    onReopenParty={handleReopenParty}
+                    onDeleteParty={handleDeleteParty}
+                    isConcluded={false}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 bg-gray-800 p-6 rounded-lg">
+                You have no active parties.
+              </p>
+            )}
+          </section>
+
+          {/* --- MODIFIED: Renamed to "Active Public Parties" --- */}
+          <section className="mt-12">
+            <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-green-500 pl-4">
+              Active Conductors
+            </h2>
+            {activePublicParties.length > 0 ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {activePublicParties.map((party) => (
+                  <PartyCard
+                    key={party.id}
+                    party={party}
+                    currentUser={user}
+                    onCrashParty={handleCrashParty}
+                    onReopenParty={handleReopenParty}
+                    onDeleteParty={handleDeleteParty}
+                    isConcluded={false}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 bg-gray-800 p-6 rounded-lg">
+                No active public parties at the moment.
+              </p>
+            )}
+          </section>
+
+          <section className="mt-12">
+            <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-gray-500 pl-4">
+              Recently Concluded Conductors
+            </h2>
+            {concludedParties.length > 0 ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {concludedParties.map((party) => (
+                  <PartyCard
+                    key={party.id}
+                    party={party}
+                    currentUser={user}
+                    onCrashParty={handleCrashParty}
+                    onReopenParty={handleReopenParty}
+                    onDeleteParty={handleDeleteParty}
+                    isConcluded={true}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 bg-gray-800 p-6 rounded-lg">
+                No recently concluded public parties found.
+              </p>
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -13,24 +13,28 @@ import {
 import { getMovieDetails, searchTMDb } from "../api/tmdb";
 import ReviewMovieModal from "./ReviewMovieModal";
 import WatchList from "./WatchList";
+import ShareableLink from "./ShareableLink";
+import { useDebounce } from "../hooks/useDebounce";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const handleSearch = async (e) => {
-    const query = e.target.value;
-    setSearchTerm(query);
-    if (query.length < 2) {
-      setResults([]);
-      return;
-    }
-    setLoading(true);
-    const searchResults = await searchTMDb(query);
-    setResults(searchResults.filter((res) => !existingIds.includes(res.id)));
-    setLoading(false);
-  };
+  useEffect(() => {
+    const search = async () => {
+      if (debouncedSearchTerm.length < 2) {
+        setResults([]);
+        return;
+      }
+      setLoading(true);
+      const searchResults = await searchTMDb(debouncedSearchTerm);
+      setResults(searchResults.filter((res) => !existingIds.includes(res.id)));
+      setLoading(false);
+    };
+    search();
+  }, [debouncedSearchTerm]); // The API call is now driven by the debounced term
 
   const handleSelectMovie = (movie) => {
     onSelect(movie);
@@ -46,9 +50,9 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
       <input
         type="text"
         value={searchTerm}
-        onChange={handleSearch}
+        onChange={(e) => setSearchTerm(e.target.value)}
         className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
-        placeholder="Search to suggest a movie..."
+        placeholder="Search for a movie to add..."
       />
       {loading && (
         <p className="text-sm text-gray-400 mt-1 pl-2">Searching...</p>
@@ -417,7 +421,7 @@ const ViewWatchParty = () => {
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
         <div className="container mx-auto px-4">
           <button
-            onClick={() => navigate("/conductors")}
+            onClick={() => navigate("/conductor-hub")}
             className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
           >
             <ArrowLeft size={20} /> Back to Hub
@@ -433,10 +437,16 @@ const ViewWatchParty = () => {
               </span>
             </p>
           </div>
+          {party.stream_url && (
+            <div className="mb-8 max-w-2xl mx-auto">
+              <ShareableLink link={party.stream_url} />
+            </div>
+          )}
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid md:grid-cols-3 gap-8">
               <div className="md:col-span-1 space-y-6">
                 <WatchList
+                  party={party}
                   watchedMovies={watchedMovieDetails}
                   nowPlaying={nowPlayingMovieDetails}
                   upNext={upNextMovieDetails}

@@ -144,7 +144,7 @@ const CreateWatchParty = () => {
   const [formMessage, setFormMessage] = useState("");
 
   const generateInviteCode = () =>
-    Math.random().toString(36).substring(2, 7).toUpperCase();
+    crypto.randomUUID().substring(0, 6).toUpperCase();
 
   const copyToClipboard = (text) => {
     const textArea = document.createElement("textarea");
