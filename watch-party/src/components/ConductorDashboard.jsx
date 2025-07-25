@@ -9,7 +9,7 @@ import MoviePoll from "./MoviePoll";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
 import ReviewMovieModal from "./ReviewMovieModal";
-import { ArrowLeft, Search, LinkIcon } from "lucide-react";
+import { ArrowLeft, Search, LinkIcon, Edit3, Save, X } from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
@@ -153,6 +153,26 @@ const ConductorDashboard = () => {
   const [movieToReview, setMovieToReview] = useState(null);
   const prevMoviesWatchedRef = useRef([]);
   const [tiedMovies, setTiedMovies] = useState([]);
+  // --- NEW STATE for inline editing the party title ---
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [partyTitleInput, setPartyTitleInput] = useState("");
+
+  const handleEditTitle = () => {
+    setPartyTitleInput(party.party_name); // Pre-fill the input with the current name
+    setIsEditingTitle(true);
+  };
+
+  const handleSaveTitle = () => {
+    if (partyTitleInput.trim()) {
+      updatePartyStatus({ party_name: partyTitleInput.trim() });
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setPartyTitleInput(""); // Clear the input
+  };
 
   const handleUpdateStreamUrl = (newUrl) => {
     updatePartyStatus({ stream_url: newUrl });
@@ -843,6 +863,46 @@ const ConductorDashboard = () => {
               {error}
             </div>
           )}
+          {/* --- NEW: Editable Party Title --- */}
+          <div className="text-center mb-8">
+            {isEditingTitle ? (
+              <div className="flex justify-center items-center gap-2">
+                <input
+                  type="text"
+                  value={partyTitleInput}
+                  onChange={(e) => setPartyTitleInput(e.target.value)}
+                  className="bg-gray-700 border-2 border-gray-600 text-white text-4xl md:text-5xl font-extrabold text-center rounded-lg p-2"
+                />
+                <button
+                  onClick={handleSaveTitle}
+                  className="p-2 text-green-400 hover:bg-gray-700 rounded-full"
+                >
+                  <Save size={24} />
+                </button>
+                <button
+                  onClick={handleCancelEditTitle}
+                  className="p-2 text-red-400 hover:bg-gray-700 rounded-full"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex justify-center items-center gap-4">
+                <h1 className="text-4xl md:text-5xl font-extrabold text-white">
+                  {party.party_name}
+                </h1>
+                <button
+                  onClick={handleEditTitle}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full"
+                >
+                  <Edit3 size={20} />
+                </button>
+              </div>
+            )}
+            <p className="text-lg text-gray-400 pt-2">
+              You are the conductor of this party.
+            </p>
+          </div>
 
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid md:grid-cols-3 gap-8">

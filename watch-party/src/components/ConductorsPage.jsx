@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
 import { useNavigate } from "react-router-dom";
-import { getMovieDetails } from "../api/tmdb";
+import { getMovieDetails, getMovieBackdrops } from "../api/tmdb";
 import {
   PlayCircle,
   CheckCircle,
@@ -35,6 +35,9 @@ const PartyCard = ({
   const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
   const [upNextDetails, setUpNextDetails] = useState(null);
   const [intermissionTime, setIntermissionTime] = useState(0);
+  const [backdrops, setBackdrops] = useState([]);
+  const [currentBackdropIndex, setCurrentBackdropIndex] = useState(0);
+  const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
     if (isConcluded) return;
@@ -49,9 +52,34 @@ const PartyCard = ({
           ? await getMovieDetails(party.up_next_tmdb_id)
           : null
       );
+      const movieIdForImages =
+        party.now_playing_tmdb_id || party.featured_movie_tmdb_id;
+      if (movieIdForImages) {
+        const backdropUrls = await getMovieBackdrops(movieIdForImages);
+        setBackdrops(backdropUrls);
+      }
     };
     fetchCardMovieDetails();
   }, [party.now_playing_tmdb_id, party.up_next_tmdb_id, isConcluded]);
+
+  // --- NEW: useEffect to handle the 5-second image cycling ---
+  useEffect(() => {
+    if (backdrops.length > 1) {
+      const timer = setInterval(() => {
+        setIsFading(true); // Start fading out
+
+        // Wait for the fade-out to complete before changing the image
+        setTimeout(() => {
+          setCurrentBackdropIndex(
+            (prevIndex) => (prevIndex + 1) % backdrops.length
+          );
+          setIsFading(false); // Start fading back in
+        }, 500); // This should match the transition duration
+      }, 15000); // Cycle every 5 seconds
+
+      return () => clearInterval(timer);
+    }
+  }, [backdrops]);
 
   useEffect(() => {
     if (isConcluded) return;
@@ -88,18 +116,27 @@ const PartyCard = ({
     new Date() - new Date(party.end_time) < 3600000;
   const isPlaying = party.party_state?.status === "playing";
   const isIntermission = party.party_state?.status === "intermission";
+  // Determine the current image URL
+  const currentImage =
+    backdrops.length > 0
+      ? backdrops[currentBackdropIndex]
+      : nowPlayingDetails?.imageUrl ||
+        party.featured_movie_image_url ||
+        "https://placehold.co/400x225/1a202c/ffffff?text=No+Image";
 
   return (
     <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 hover:border-indigo-500 transition-all duration-300 flex flex-col">
-      <img
-        src={
-          nowPlayingDetails?.imageUrl ||
-          party.featured_movie_image_url ||
-          "https://placehold.co/400x225/1a202c/ffffff?text=No+Image"
-        }
-        alt={nowPlayingDetails?.title || party.featured_movie}
-        className="w-full h-48 object-cover rounded-t-xl"
-      />
+      <div className="relative w-full h-48">
+        <img
+          key={currentImage} // Use the image URL as the key
+          src={currentImage}
+          alt={nowPlayingDetails?.title || party.featured_movie}
+          // --- MODIFIED: Opacity is now controlled by the isFading state ---
+          className={`w-full h-full object-cover rounded-t-xl absolute top-0 left-0 transition-opacity duration-500 ${
+            isFading ? "opacity-0" : "opacity-100"
+          }`}
+        />
+      </div>
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -107,7 +144,10 @@ const PartyCard = ({
               {party.party_name}
             </h3>
             <p className="text-sm text-gray-400">
-              by {party.conductor_username || "Anonymous"}
+              by{" "}
+              <span className="font-semibold text-indigo-300">
+                {party.conductor_username || "Anonymous"}
+              </span>
             </p>
           </div>
           <div
@@ -263,102 +303,88 @@ const ConductorsPage = () => {
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [joinError, setJoinError] = useState("");
 
-  const fetchParties = async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from("watch_parties")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching parties:", error);
-      setError(error.message);
-    } else {
-      // --- MODIFIED: Filter parties into three separate lists ---
-      const allActive = data.filter((p) => p.status === "active");
-
-      setMyActiveParties(allActive.filter((p) => p.conductor_id === user.id));
-      setActivePublicParties(
-        allActive.filter((p) => p.conductor_id !== user.id && p.is_public)
-      );
-      setConcludedParties(
-        data.filter((p) => p.status === "concluded" && p.is_public)
-      );
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  };
 
-  useEffect(() => {
+    const fetchParties = async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from("watch_parties")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching parties:", error);
+        setError(error.message);
+      } else {
+        const allActive = data.filter((p) => p.status === "active");
+        setMyActiveParties(allActive.filter((p) => p.conductor_id === user.id));
+        setActivePublicParties(
+          allActive.filter((p) => p.conductor_id !== user.id && p.is_public)
+        );
+        setConcludedParties(
+          data.filter((p) => p.status === "concluded" && p.is_public)
+        );
+      }
+      setLoading(false);
+    };
+
     fetchParties();
-  }, [user]); // Add user to dependency array to refetch when user logs in
 
-  const handleJoinPrivateParty = async () => {
-    /* ... remains the same */
-  };
+    // --- NEW: Intelligent update handlers ---
+    const handlePartyUpdate = (updatedParty) => {
+      const isMyParty = updatedParty.conductor_id === user.id;
+      const isPublic = updatedParty.is_public;
 
-  // This effect listens for any changes to the watch_parties table
-  // and intelligently updates the local state without a full refetch.
-  useEffect(() => {
-    const handlePartyUpdate = (payload) => {
-      console.log("Party data changed:", payload);
-      const updatedParty = payload.new;
+      // Update "My Active Parties"
+      setMyActiveParties((list) =>
+        list.map((p) => (p.id === updatedParty.id ? updatedParty : p))
+      );
 
-      // This function updates a single party in any of the lists
-      const updateList = (listSetter) => {
-        listSetter((currentList) =>
-          currentList.map((p) => (p.id === updatedParty.id ? updatedParty : p))
-        );
-      };
-
-      updateList(setMyActiveParties);
-      updateList(setActivePublicParties);
-      updateList(setConcludedParties);
-    };
-
-    const handleNewParty = (payload) => {
-      console.log("New party created:", payload);
-      // A full refetch is simplest to handle new parties and re-sorting
-      fetchParties();
-    };
-
-    const handleDeleteParty = (payload) => {
-      console.log("Party deleted:", payload);
-      const deletedPartyId = payload.old.id;
-      // This function removes a single party from any of the lists
-      const removeFromList = (listSetter) => {
-        listSetter((currentList) =>
-          currentList.filter((p) => p.id !== deletedPartyId)
-        );
-      };
-      removeFromList(setMyActiveParties);
-      removeFromList(setActivePublicParties);
-      removeFromList(setConcludedParties);
+      // Update "Active Public Parties"
+      setActivePublicParties((list) => {
+        // If it's a public party conducted by someone else, update or add it.
+        if (!isMyParty && isPublic) {
+          return list.find((p) => p.id === updatedParty.id)
+            ? list.map((p) => (p.id === updatedParty.id ? updatedParty : p))
+            : [...list, updatedParty];
+        }
+        // Otherwise, ensure it's removed from this list.
+        return list.filter((p) => p.id !== updatedParty.id);
+      });
     };
 
     const subscription = supabase
       .channel("public:watch_parties")
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "watch_parties" },
-        handlePartyUpdate
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "watch_parties" },
-        handleNewParty
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "watch_parties" },
-        handleDeleteParty
+        { event: "*", schema: "public", table: "watch_parties" },
+        (payload) => {
+          console.log("Party data changed...", payload);
+          // --- MODIFIED: Use intelligent updates instead of a full refetch ---
+          if (payload.eventType === "UPDATE") {
+            handlePartyUpdate(payload.new);
+          } else {
+            // For new parties or deletions, a full refetch is still the simplest way
+            // to ensure correct sorting and filtering across all lists.
+            fetchParties();
+          }
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, [fetchParties]); // We add fetchParties to the dependency array
+  }, [user]); // The dependency array is correct
+
+  const handleJoinPrivateParty = async () => {
+    /* ... remains the same */
+  };
 
   const handleCrashParty = async (partyId) => {
     if (

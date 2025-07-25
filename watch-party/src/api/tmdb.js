@@ -2,7 +2,7 @@
 
 const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
 const tmdbBaseUrl = "https://api.themoviedb.org/3";
-const tmdbImageUrl = "https://image.tmdb.org/t/p/w200";
+const tmdbImageUrl = "https://image.tmdb.org/t/p/w500";
 
 /**
  * Fetches detailed information for a single movie from TMDB.
@@ -54,6 +54,40 @@ export const searchTMDb = async (query) => {
     return detailedResults.filter(Boolean); // Filter out any nulls from failed fetches
   } catch (error) {
     console.error("Error searching TMDB:", error);
+    return [];
+  }
+};
+
+const tmdbImageBaseUrl = "https://image.tmdb.org/t/p/";
+
+/**
+ * Fetches a list of English or language-neutral backdrop images for a movie.
+ * @param {number} movieId - The TMDB ID of the movie.
+ * @returns {Promise<string[]>} A promise that resolves to an array of full image URLs.
+ */
+export const getMovieBackdrops = async (movieId) => {
+  if (!movieId) return [];
+  try {
+    const response = await fetch(
+      `${tmdbBaseUrl}/movie/${movieId}/images?api_key=${tmdbApiKey}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch movie images");
+    const data = await response.json();
+
+    if (data.backdrops && data.backdrops.length > 0) {
+      const filteredBackdrops = data.backdrops.filter(
+        // Filter for English ("en") or language-neutral (null) backdrops
+        (backdrop) => backdrop.iso_639_1 === "en" || backdrop.iso_639_1 === null
+      );
+
+      // Return an array of full image URLs
+      return filteredBackdrops.map(
+        (backdrop) => `${tmdbImageBaseUrl}w780${backdrop.file_path}`
+      );
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching movie backdrops:", error);
     return [];
   }
 };
