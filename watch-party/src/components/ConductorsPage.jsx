@@ -19,10 +19,9 @@ import {
   Trash2,
   Vote,
   KeyRound,
-  UserCheck, // New Icon
+  UserCheck,
 } from "lucide-react";
 
-// The PartyCard component remains the same
 const PartyCard = ({
   party,
   currentUser,
@@ -31,6 +30,7 @@ const PartyCard = ({
   onDeleteParty,
   isConcluded,
 }) => {
+  // ... PartyCard component remains the same ...
   const navigate = useNavigate();
   const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
   const [upNextDetails, setUpNextDetails] = useState(null);
@@ -60,23 +60,24 @@ const PartyCard = ({
       }
     };
     fetchCardMovieDetails();
-  }, [party.now_playing_tmdb_id, party.up_next_tmdb_id, isConcluded]);
+  }, [
+    party.now_playing_tmdb_id,
+    party.featured_movie_tmdb_id,
+    party.up_next_tmdb_id,
+    isConcluded,
+  ]);
 
-  // --- NEW: useEffect to handle the 5-second image cycling ---
   useEffect(() => {
     if (backdrops.length > 1) {
       const timer = setInterval(() => {
-        setIsFading(true); // Start fading out
-
-        // Wait for the fade-out to complete before changing the image
+        setIsFading(true);
         setTimeout(() => {
           setCurrentBackdropIndex(
             (prevIndex) => (prevIndex + 1) % backdrops.length
           );
-          setIsFading(false); // Start fading back in
-        }, 500); // This should match the transition duration
-      }, 15000); // Cycle every 5 seconds
-
+          setIsFading(false);
+        }, 500);
+      }, 15000);
       return () => clearInterval(timer);
     }
   }, [backdrops]);
@@ -116,7 +117,6 @@ const PartyCard = ({
     new Date() - new Date(party.end_time) < 3600000;
   const isPlaying = party.party_state?.status === "playing";
   const isIntermission = party.party_state?.status === "intermission";
-  // Determine the current image URL
   const currentImage =
     backdrops.length > 0
       ? backdrops[currentBackdropIndex]
@@ -128,10 +128,9 @@ const PartyCard = ({
     <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 hover:border-indigo-500 transition-all duration-300 flex flex-col">
       <div className="relative w-full h-48">
         <img
-          key={currentImage} // Use the image URL as the key
+          key={currentImage}
           src={currentImage}
           alt={nowPlayingDetails?.title || party.featured_movie}
-          // --- MODIFIED: Opacity is now controlled by the isFading state ---
           className={`w-full h-full object-cover rounded-t-xl absolute top-0 left-0 transition-opacity duration-500 ${
             isFading ? "opacity-0" : "opacity-100"
           }`}
@@ -292,9 +291,7 @@ const ConductorsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // --- NEW: State for the user's own parties ---
   const [myActiveParties, setMyActiveParties] = useState([]);
-
   const [activePublicParties, setActivePublicParties] = useState([]);
   const [concludedParties, setConcludedParties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -303,76 +300,55 @@ const ConductorsPage = () => {
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [joinError, setJoinError] = useState("");
 
+  // --- MODIFIED: fetchParties is now outside the useEffect and wrapped in useCallback ---
+  const fetchParties = useCallback(async () => {
+    // We don't need to set loading to true here because the Realtime handler will call this.
+    // Only the initial load should show the full loading screen.
+    setError(null);
+    const { data, error } = await supabase
+      .from("watch_parties")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching parties:", error);
+      setError(error.message);
+    } else if (data) {
+      const allActive = data.filter((p) => p.status === "active");
+      if (user) {
+        setMyActiveParties(allActive.filter((p) => p.conductor_id === user.id));
+        setActivePublicParties(
+          allActive.filter((p) => p.conductor_id !== user.id && p.is_public)
+        );
+      } else {
+        setActivePublicParties(allActive.filter((p) => p.is_public));
+      }
+      setConcludedParties(
+        data.filter((p) => p.status === "concluded" && p.is_public)
+      );
+    }
+  }, [user]); // Dependency on user is correct
+
+  // --- MODIFIED: This is now a single, unified useEffect for data and subscriptions ---
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
 
-    const fetchParties = async () => {
-      setLoading(true);
-      setError(null);
-      const { data, error } = await supabase
-        .from("watch_parties")
-        .select("*")
-        .order("created_at", { ascending: false });
+    // Initial fetch on component mount
+    setLoading(true);
+    fetchParties().then(() => setLoading(false));
 
-      if (error) {
-        console.error("Error fetching parties:", error);
-        setError(error.message);
-      } else {
-        const allActive = data.filter((p) => p.status === "active");
-        setMyActiveParties(allActive.filter((p) => p.conductor_id === user.id));
-        setActivePublicParties(
-          allActive.filter((p) => p.conductor_id !== user.id && p.is_public)
-        );
-        setConcludedParties(
-          data.filter((p) => p.status === "concluded" && p.is_public)
-        );
-      }
-      setLoading(false);
-    };
-
-    fetchParties();
-
-    // --- NEW: Intelligent update handlers ---
-    const handlePartyUpdate = (updatedParty) => {
-      const isMyParty = updatedParty.conductor_id === user.id;
-      const isPublic = updatedParty.is_public;
-
-      // Update "My Active Parties"
-      setMyActiveParties((list) =>
-        list.map((p) => (p.id === updatedParty.id ? updatedParty : p))
-      );
-
-      // Update "Active Public Parties"
-      setActivePublicParties((list) => {
-        // If it's a public party conducted by someone else, update or add it.
-        if (!isMyParty && isPublic) {
-          return list.find((p) => p.id === updatedParty.id)
-            ? list.map((p) => (p.id === updatedParty.id ? updatedParty : p))
-            : [...list, updatedParty];
-        }
-        // Otherwise, ensure it's removed from this list.
-        return list.filter((p) => p.id !== updatedParty.id);
-      });
-    };
-
+    // Realtime subscription setup
     const subscription = supabase
       .channel("public:watch_parties")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "watch_parties" },
         (payload) => {
-          console.log("Party data changed...", payload);
-          // --- MODIFIED: Use intelligent updates instead of a full refetch ---
-          if (payload.eventType === "UPDATE") {
-            handlePartyUpdate(payload.new);
-          } else {
-            // For new parties or deletions, a full refetch is still the simplest way
-            // to ensure correct sorting and filtering across all lists.
-            fetchParties();
-          }
+          console.log("Party data changed, refreshing list...", payload);
+          fetchParties();
         }
       )
       .subscribe();
@@ -380,39 +356,33 @@ const ConductorsPage = () => {
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, [user]); // The dependency array is correct
+  }, [user, fetchParties]);
 
   const handleJoinPrivateParty = async () => {
-    /* ... remains the same */
+    /* ... remains the same ... */
   };
 
+  // --- MODIFIED: These handlers now correctly call the memoized fetchParties function ---
   const handleCrashParty = async (partyId) => {
-    if (
-      !(
-        await supabase
-          .from("watch_parties")
-          .update({ status: "concluded", end_time: new Date().toISOString() })
-          .eq("id", partyId)
-      ).error
-    )
-      fetchParties();
+    const { error } = await supabase
+      .from("watch_parties")
+      .update({ status: "concluded", end_time: new Date().toISOString() })
+      .eq("id", partyId);
+    if (!error) fetchParties();
   };
   const handleReopenParty = async (partyId) => {
-    if (
-      !(
-        await supabase
-          .from("watch_parties")
-          .update({ status: "active", end_time: null })
-          .eq("id", partyId)
-      ).error
-    )
-      fetchParties();
+    const { error } = await supabase
+      .from("watch_parties")
+      .update({ status: "active", end_time: null })
+      .eq("id", partyId);
+    if (!error) fetchParties();
   };
   const handleDeleteParty = async (partyId) => {
-    if (
-      !(await supabase.from("watch_parties").delete().eq("id", partyId)).error
-    )
-      fetchParties();
+    const { error } = await supabase
+      .from("watch_parties")
+      .delete()
+      .eq("id", partyId);
+    if (!error) fetchParties();
   };
 
   if (loading)
@@ -460,7 +430,6 @@ const ConductorsPage = () => {
           </div>
         </div>
       )}
-
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
@@ -474,8 +443,6 @@ const ConductorsPage = () => {
               <KeyRound size={20} /> Join Private Party
             </button>
           </div>
-
-          {/* --- NEW: "My Active Parties" Section --- */}
           <section>
             <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-indigo-500 pl-4 flex items-center gap-3">
               <UserCheck size={28} /> Conducting
@@ -500,11 +467,9 @@ const ConductorsPage = () => {
               </p>
             )}
           </section>
-
-          {/* --- MODIFIED: Renamed to "Active Public Parties" --- */}
           <section className="mt-12">
             <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-green-500 pl-4">
-              Active Conductors
+              Active Public Parties
             </h2>
             {activePublicParties.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -526,10 +491,9 @@ const ConductorsPage = () => {
               </p>
             )}
           </section>
-
           <section className="mt-12">
             <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-gray-500 pl-4">
-              Recently Concluded Conductors
+              Recently Concluded Public Parties
             </h2>
             {concludedParties.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">

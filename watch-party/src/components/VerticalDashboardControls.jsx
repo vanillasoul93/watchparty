@@ -25,16 +25,19 @@ const DashboardControls = ({
             <span className="ml-2">End Intermission</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={customIntermissionMinutes}
-              onChange={(e) => setCustomIntermissionMinutes(e.target.value)}
-              className="h-12 w-24 bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 text-center text-lg"
-              min="1"
-            />
-            {/* --- NEW: Label is now a flex item --- */}
-            <span className="text-gray-400 text-sm">minute(s)</span>
+          <div className="flex items-center flex-col space-y-4">
+            <div className="flex items-center justify-center gap-2 w-full">
+              <input
+                type="number"
+                value={customIntermissionMinutes}
+                onChange={(e) => setCustomIntermissionMinutes(e.target.value)}
+                className="h-12 w-30 bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 text-center text-lg"
+                min="1"
+              />
+              {/* --- NEW: Label is now a flex item --- */}
+              <span className="text-gray-400 text-s">minute(s)</span>
+            </div>
+
             <button
               onClick={() => onSetIntermission(customIntermissionMinutes)}
               className="h-12 w-full bg-gray-700 rounded-lg flex items-center justify-center gap-2 text-yellow-400 hover:bg-yellow-900"
