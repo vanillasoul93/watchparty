@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/Auth";
 import { useParams, useNavigate } from "react-router-dom";
 import { getMovieDetails, searchTMDb } from "../api/tmdb";
 import WatchList from "./WatchList";
-import DashboardControls from "./DashboardControls";
+import VerticalDashboardControls from "./VerticalDashboardControls";
 import MoviePoll from "./MoviePoll";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
@@ -847,6 +847,17 @@ const ConductorDashboard = () => {
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid md:grid-cols-3 gap-8">
               <div className="md:col-span-1 flex justify-between flex-col space-y-6">
+                <VerticalDashboardControls
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onCrashParty={handleCrashParty}
+                  onSetIntermission={handleStartIntermission}
+                  onEndIntermission={handleEndIntermission}
+                  customIntermissionMinutes={customIntermissionMinutes}
+                  setCustomIntermissionMinutes={setCustomIntermissionMinutes}
+                  playState={party.party_state?.status}
+                  isVotingOpen={party.voting_open}
+                />
                 <WatchList
                   party={party}
                   watchedMovies={watchedMovieDetails}
@@ -867,17 +878,7 @@ const ConductorDashboard = () => {
                   initialUrl={party.stream_url}
                   onUpdate={handleUpdateStreamUrl}
                 />
-                <DashboardControls
-                  onPlay={handlePlay}
-                  onPause={handlePause}
-                  onCrashParty={handleCrashParty}
-                  onSetIntermission={handleStartIntermission}
-                  onEndIntermission={handleEndIntermission}
-                  customIntermissionMinutes={customIntermissionMinutes}
-                  setCustomIntermissionMinutes={setCustomIntermissionMinutes}
-                  playState={party.party_state?.status}
-                  isVotingOpen={party.voting_open}
-                />
+
                 <MoviePoll
                   movies={party.poll_movies}
                   voteCounts={pollVoteCounts}

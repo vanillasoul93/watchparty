@@ -159,6 +159,36 @@ const ViewWatchParty = () => {
     }
   }, [partyId, user]);
 
+  // This effect manages adding/removing the user from the persistent viewers table,
+  // which in turn triggers the database functions to update the count.
+  useEffect(() => {
+    if (!partyId || !user) return;
+
+    const joinParty = async () => {
+      await supabase.from("party_viewers").insert(
+        {
+          party_id: partyId,
+          user_id: user.id,
+          username: user.user_metadata?.username || "Anonymous",
+        },
+        { onConflict: "party_id, user_id" }
+      ); // Use onConflict to prevent errors on refresh
+    };
+
+    joinParty();
+
+    // The return function runs when the component unmounts (user leaves the page)
+    return () => {
+      const leaveParty = async () => {
+        await supabase
+          .from("party_viewers")
+          .delete()
+          .match({ party_id: partyId, user_id: user.id });
+      };
+      leaveParty();
+    };
+  }, [partyId, user]);
+
   useEffect(() => {
     if (!partyId || !user) return;
 

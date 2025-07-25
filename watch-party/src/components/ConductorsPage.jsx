@@ -296,6 +296,70 @@ const ConductorsPage = () => {
   const handleJoinPrivateParty = async () => {
     /* ... remains the same */
   };
+
+  // This effect listens for any changes to the watch_parties table
+  // and intelligently updates the local state without a full refetch.
+  useEffect(() => {
+    const handlePartyUpdate = (payload) => {
+      console.log("Party data changed:", payload);
+      const updatedParty = payload.new;
+
+      // This function updates a single party in any of the lists
+      const updateList = (listSetter) => {
+        listSetter((currentList) =>
+          currentList.map((p) => (p.id === updatedParty.id ? updatedParty : p))
+        );
+      };
+
+      updateList(setMyActiveParties);
+      updateList(setActivePublicParties);
+      updateList(setConcludedParties);
+    };
+
+    const handleNewParty = (payload) => {
+      console.log("New party created:", payload);
+      // A full refetch is simplest to handle new parties and re-sorting
+      fetchParties();
+    };
+
+    const handleDeleteParty = (payload) => {
+      console.log("Party deleted:", payload);
+      const deletedPartyId = payload.old.id;
+      // This function removes a single party from any of the lists
+      const removeFromList = (listSetter) => {
+        listSetter((currentList) =>
+          currentList.filter((p) => p.id !== deletedPartyId)
+        );
+      };
+      removeFromList(setMyActiveParties);
+      removeFromList(setActivePublicParties);
+      removeFromList(setConcludedParties);
+    };
+
+    const subscription = supabase
+      .channel("public:watch_parties")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "watch_parties" },
+        handlePartyUpdate
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "watch_parties" },
+        handleNewParty
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "watch_parties" },
+        handleDeleteParty
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [fetchParties]); // We add fetchParties to the dependency array
+
   const handleCrashParty = async (partyId) => {
     if (
       !(
