@@ -110,7 +110,7 @@ const ViewWatchParty = () => {
       if (!user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("prompt_for_reviews")
+        .select("prompt_for_reviews, suggest_anonymously")
         .eq("id", user.id)
         .single();
       setUserProfile(data);
@@ -148,14 +148,24 @@ const ViewWatchParty = () => {
   }, [partyId, user]);
 
   const refreshSuggestionData = useCallback(async () => {
-    if (!partyId || !user) return;
-    const { data } = await supabase
+    if (!partyId) return;
+
+    // This query gets all suggestion data, AND joins with profiles
+    // ONLY to get the 'suggest_anonymously' flag.
+    const { data, error } = await supabase
       .from("suggestions")
-      .select("*")
+      .select("*, profiles (suggest_anonymously)") // Note: we are NOT asking for username here
       .eq("party_id", partyId);
-    if (data) {
+
+    if (error) {
+      console.error("Error fetching suggestions with profiles:", error);
+    } else if (data) {
       setSuggestions(data);
-      setUserSuggestionCount(data.filter((s) => s.user_id === user.id).length);
+      if (user) {
+        setUserSuggestionCount(
+          data.filter((s) => s.user_id === user.id).length
+        );
+      }
     }
   }, [partyId, user]);
 
@@ -262,6 +272,18 @@ const ViewWatchParty = () => {
           if (movieDetails) setMovieToReview(movieDetails);
         }
       })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          console.log(
+            "A profile has been updated, refreshing suggestions...",
+            payload
+          );
+          // Simply re-run the function to get the latest data
+          refreshSuggestionData();
+        }
+      )
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           partyChannel.on(
@@ -377,17 +399,17 @@ const ViewWatchParty = () => {
 
   const handleSuggestMovie = async (movie) => {
     if (userSuggestionCount >= 2) return;
-    const { error } = await supabase.from("suggestions").insert({
+
+    // Always insert the real username. The display logic will handle privacy.
+    await supabase.from("suggestions").insert({
       party_id: partyId,
       user_id: user.id,
+      username: user.user_metadata?.username || "Anonymous", // Store the real name
       movie_tmdb_id: movie.id,
       movie_title: movie.title,
       movie_year: movie.year,
       movie_image_url: movie.imageUrl,
     });
-    if (!error) {
-      refreshSuggestionData(); // Optimistic update
-    }
   };
 
   const handleRemoveSuggestion = async (suggestionId) => {
@@ -574,34 +596,63 @@ const ViewWatchParty = () => {
                       Left
                     </span>
                   </div>
-                  <ul className="space-y-2 mb-4">
-                    {suggestions.map((suggestion) => (
-                      <li
-                        key={suggestion.id}
-                        className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={suggestion.movie_image_url}
-                            alt={suggestion.movie_title}
-                            className="w-10 h-16 object-cover rounded"
-                          />
-                          <span className="text-gray-300">
-                            {suggestion.movie_title} ({suggestion.movie_year})
-                          </span>
-                        </div>
-                        {suggestion.user_id === user.id && (
-                          <button
-                            onClick={() =>
-                              handleRemoveSuggestion(suggestion.id)
-                            }
-                            className="p-2 text-gray-500 hover:text-red-500"
+                  <ul className="space-y-2 mb-4 max-h-100 overflow-y-auto pr-2">
+                    {[...suggestions]
+                      .sort(
+                        (a, b) =>
+                          (b.user_id === user.id) - (a.user_id === user.id)
+                      )
+                      .map((suggestion) => {
+                        // Check if the current suggestion belongs to the logged-in user
+                        const isMySuggestion = suggestion.user_id === user.id;
+
+                        return (
+                          <li
+                            key={suggestion.id}
+                            // Conditionally add the border class
+                            className={`bg-gray-800 p-3 rounded-md flex items-center justify-between border-2 border-dashed ${
+                              isMySuggestion
+                                ? "border-indigo-600"
+                                : "border-transparent"
+                            }`}
                           >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </li>
-                    ))}
+                            <div className="flex items-center gap-4">
+                              <img
+                                src={suggestion.movie_image_url}
+                                alt={suggestion.movie_title}
+                                className="w-10 h-16 object-cover rounded"
+                              />
+                              <div className="flex flex-col">
+                                <span className="text-gray-300">
+                                  {suggestion.movie_title} (
+                                  {suggestion.movie_year})
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  Suggested by:{" "}
+                                  {
+                                    // Check the privacy flag from the joined profiles table.
+                                    // If true, show 'Anonymous'.
+                                    // If false, show the 'username' that is stored directly on the suggestion itself.
+                                    suggestion.profiles?.suggest_anonymously
+                                      ? "Anonymous"
+                                      : suggestion.username || "Anonymous"
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                            {isMySuggestion && (
+                              <button
+                                onClick={() =>
+                                  handleRemoveSuggestion(suggestion.id)
+                                }
+                                className="p-2 text-gray-500 hover:text-red-500"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
                   </ul>
                   {remainingSuggestions > 0 && (
                     <MovieSearchInput

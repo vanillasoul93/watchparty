@@ -136,6 +136,8 @@ const ProfilePage = () => {
     most_watched_movie: "N/A",
   });
 
+  const [suggestAnonymously, setSuggestAnonymously] = useState(false);
+
   // State for UI feedback and functionality
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -150,7 +152,12 @@ const ProfilePage = () => {
         // Fetch profile, movie history, and party history concurrently
         const [profileRes, movieHistoryRes, partyHistoryRes] =
           await Promise.all([
-            supabase.from("profiles").select("*").eq("id", user.id).single(),
+            supabase
+              .from("profiles")
+              // --- MODIFIED: Add 'suggest_anonymously' to the select query ---
+              .select("*, prompt_for_reviews, suggest_anonymously")
+              .eq("id", user.id)
+              .single(),
             supabase
               .from("movie_watch_history")
               .select("*")
@@ -169,6 +176,8 @@ const ProfilePage = () => {
           setAboutMe(profileRes.data.about_me || "");
           setAvatarUrl(profileRes.data.avatar_url);
           setPromptForReviews(profileRes.data.prompt_for_reviews);
+          // --- ADDED: Set the state for the new toggle ---
+          setSuggestAnonymously(profileRes.data.suggest_anonymously);
           setFavoriteMovies(
             Array.isArray(profileRes.data.favorite_movies)
               ? profileRes.data.favorite_movies
@@ -208,6 +217,7 @@ const ProfilePage = () => {
         about_me: aboutMe,
         avatar_url: avatarUrl,
         prompt_for_reviews: promptForReviews,
+        suggest_anonymously: suggestAnonymously,
         updated_at: new Date(),
       };
       const { error } = await supabase.from("profiles").upsert(updates);
@@ -389,6 +399,25 @@ const ProfilePage = () => {
             </div>
 
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
+              {/* --- NEW Suggest Anonymously Toggle --- */}
+              <div className="flex items-center justify-between">
+                <label className="text-white font-medium">
+                  Suggest Movies Anonymously
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSuggestAnonymously(!suggestAnonymously)}
+                  className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 ${
+                    suggestAnonymously ? "bg-indigo-600" : "bg-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                      suggestAnonymously ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
               <div className="flex items-center justify-between">
                 <label className="text-white font-medium">
                   Prompt for Reviews on Finish

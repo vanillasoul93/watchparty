@@ -200,12 +200,20 @@ const ConductorDashboard = () => {
 
   const refreshSuggestionData = useCallback(async () => {
     if (!partyId) return;
-    const { data } = await supabase
+
+    // This query gets all suggestion data, AND joins with profiles
+    // ONLY to get the 'suggest_anonymously' flag.
+    const { data, error } = await supabase
       .from("suggestions")
-      .select("*")
+      .select("*, profiles (suggest_anonymously)") // Note: we are NOT asking for username here
       .eq("party_id", partyId);
-    if (data) setSuggestions(data);
-  }, [partyId]);
+
+    if (error) {
+      console.error("Error fetching suggestions with profiles:", error);
+    } else if (data) {
+      setSuggestions(data);
+    }
+  }, [partyId, user]);
 
   // --- UPDATED: useEffect for Realtime and Data Fetching ---
   // --- useEffect for Initial Data Fetching ---
@@ -285,6 +293,18 @@ const ConductorDashboard = () => {
         );
         setViewers(currentViewers);
       })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          console.log(
+            "A profile has been updated, refreshing suggestions...",
+            payload
+          );
+          // Simply re-run the function to get the latest data
+          refreshSuggestionData();
+        }
+      )
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           // Announce presence when connected
