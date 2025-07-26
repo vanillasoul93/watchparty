@@ -1,5 +1,5 @@
 import React from "react";
-import { Play, Pause, XCircle, Timer, LinkIcon } from "lucide-react";
+import { Play, Pause, XCircle, Timer } from "lucide-react";
 
 const DashboardControls = ({
   onPlay,

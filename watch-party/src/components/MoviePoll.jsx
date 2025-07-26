@@ -1,12 +1,13 @@
 import React from "react";
 import { Vote, PlusCircle, Trash2 } from "lucide-react";
+import { useAutoAnimate } from "@formkit/auto-animate/react"; // Use the hook
 
 const MoviePoll = ({
   movies,
   voteCounts,
   onOpenPoll,
   onClosePoll,
-  onCancelPoll, // Accept the new prop
+  onCancelPoll,
   onRemoveFromPoll,
   onAddMovie,
   isVotingOpen,
@@ -14,6 +15,8 @@ const MoviePoll = ({
   setIsAddingToPoll,
   SearchComponent,
 }) => {
+  const [parent] = useAutoAnimate({ duration: 500 }); // Initialize the hook (500ms is a nice, noticeable duration)
+
   const sortedMovies = [...(movies || [])].sort((a, b) => {
     const votesA = voteCounts[a.id] || 0;
     const votesB = voteCounts[b.id] || 0;
@@ -23,6 +26,7 @@ const MoviePoll = ({
   return (
     <div className="bg-gray-900 p-4 rounded-lg">
       <div className="flex justify-between items-center mb-4">
+        {/* ... Header and buttons remain the same ... */}
         <h3 className="font-bold text-white flex items-center gap-2">
           <Vote size={20} /> Movie Poll
         </h3>
@@ -36,7 +40,6 @@ const MoviePoll = ({
             </button>
           )}
           {isVotingOpen ? (
-            // --- MODIFIED: Show two buttons when poll is open ---
             <div className="flex items-center gap-2">
               <button
                 onClick={onCancelPoll}
@@ -63,7 +66,6 @@ const MoviePoll = ({
         </div>
       </div>
 
-      {/* ... The rest of the component's JSX remains the same ... */}
       {isVotingOpen && (
         <p className="text-green-400 text-sm mb-3">
           Voting is now open for viewers!
@@ -75,7 +77,7 @@ const MoviePoll = ({
           The movie poll is empty.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2" ref={parent}>
           {sortedMovies.map((movie) => (
             <li
               key={movie.id}

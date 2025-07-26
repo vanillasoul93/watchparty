@@ -9,7 +9,17 @@ import MoviePoll from "./MoviePoll";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
 import ReviewMovieModal from "./ReviewMovieModal";
-import { ArrowLeft, Search, LinkIcon, Edit3, Save, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Search,
+  LinkIcon,
+  Edit3,
+  Save,
+  X,
+  Settings,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
@@ -128,6 +138,104 @@ const StreamLinkCard = ({ initialUrl, onUpdate }) => {
   );
 };
 
+const PartySettings = ({ party, onUpdate }) => {
+  const [votes, setVotes] = useState(party.votes_per_user);
+  const [suggestions, setSuggestions] = useState(party.suggestions_per_user);
+
+  const handleSave = () => {
+    onUpdate({
+      votes_per_user: parseInt(votes, 10),
+      suggestions_per_user: parseInt(suggestions, 10),
+    });
+  };
+
+  // Helper functions to increment/decrement values
+  const handleVoteChange = (amount) => {
+    const newValue = Math.max(1, Math.min(10, votes + amount));
+    setVotes(newValue);
+  };
+  const handleSuggestionChange = (amount) => {
+    const newValue = Math.max(0, Math.min(5, suggestions + amount));
+    setSuggestions(newValue);
+  };
+
+  return (
+    <div className="bg-gray-900 p-6 rounded-lg flex flex-col h-full">
+      <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+        <Settings size={20} /> Party Settings
+      </h3>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <label className="text-gray-300">Votes per Viewer</label>
+          {/* --- MODIFIED: Input with custom buttons --- */}
+          <div className="relative">
+            <input
+              type="number"
+              value={votes}
+              onChange={(e) => setVotes(parseInt(e.target.value, 10))}
+              // This class hides the default spinners
+              className="w-24 bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              min="1"
+              max="10"
+            />
+            <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-center">
+              <button
+                onClick={() => handleVoteChange(1)}
+                className="px-1 text-gray-300 hover:text-green-400"
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                onClick={() => handleVoteChange(-1)}
+                className="px-1 text-gray-300 hover:text-red-400"
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-between items-center">
+          <label className="text-gray-300">Suggestions per Viewer</label>
+          {/* --- MODIFIED: Input with custom buttons --- */}
+          <div className="relative">
+            <input
+              type="number"
+              value={suggestions}
+              onChange={(e) => setSuggestions(parseInt(e.target.value, 10))}
+              className="w-24 bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              min="0"
+              max="5"
+            />
+            <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-center">
+              <button
+                onClick={() => handleSuggestionChange(1)}
+                className="px-1 text-gray-300 hover:text-green-400"
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                onClick={() => handleSuggestionChange(-1)}
+                className="px-1 text-gray-300 hover:text-red-400"
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-grow"></div>
+      <div>
+        <button
+          onClick={handleSave}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+        >
+          Save Settings
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ConductorDashboard = () => {
   const { partyId } = useParams();
   const navigate = useNavigate();
@@ -156,6 +264,10 @@ const ConductorDashboard = () => {
   // --- NEW STATE for inline editing the party title ---
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [partyTitleInput, setPartyTitleInput] = useState("");
+
+  const handleUpdateSettings = (settings) => {
+    updatePartyStatus(settings);
+  };
 
   const handleEditTitle = () => {
     setPartyTitleInput(party.party_name); // Pre-fill the input with the current name
@@ -926,18 +1038,12 @@ const ConductorDashboard = () => {
 
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid md:grid-cols-3 gap-8">
-              <div className="md:col-span-1 flex justify-between flex-col space-y-6">
-                <VerticalDashboardControls
-                  onPlay={handlePlay}
-                  onPause={handlePause}
-                  onCrashParty={handleCrashParty}
-                  onSetIntermission={handleStartIntermission}
-                  onEndIntermission={handleEndIntermission}
-                  customIntermissionMinutes={customIntermissionMinutes}
-                  setCustomIntermissionMinutes={setCustomIntermissionMinutes}
-                  playState={party.party_state?.status}
-                  isVotingOpen={party.voting_open}
+              <div className="md:col-span-1 flex flex-col space-y-6">
+                <StreamLinkCard
+                  initialUrl={party.stream_url}
+                  onUpdate={handleUpdateStreamUrl}
                 />
+
                 <WatchList
                   party={party}
                   watchedMovies={watchedMovieDetails}
@@ -954,10 +1060,23 @@ const ConductorDashboard = () => {
                 <ViewersList viewers={viewers} />
               </div>
               <div className="md:col-span-2 space-y-8">
-                <StreamLinkCard
-                  initialUrl={party.stream_url}
-                  onUpdate={handleUpdateStreamUrl}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <VerticalDashboardControls
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onCrashParty={handleCrashParty}
+                    onSetIntermission={handleStartIntermission}
+                    onEndIntermission={handleEndIntermission}
+                    customIntermissionMinutes={customIntermissionMinutes}
+                    setCustomIntermissionMinutes={setCustomIntermissionMinutes}
+                    playState={party.party_state?.status}
+                    isVotingOpen={party.voting_open}
+                  />
+                  <PartySettings
+                    party={party}
+                    onUpdate={handleUpdateSettings}
+                  />
+                </div>
 
                 <MoviePoll
                   movies={party.poll_movies}

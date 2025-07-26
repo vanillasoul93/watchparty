@@ -383,7 +383,10 @@ const ViewWatchParty = () => {
   }, [party]);
 
   const handleVote = async (movieTmdbId) => {
-    if (userVotes.length >= 3) return;
+    // Use the dynamic value from the party object, with a fallback to 3
+    const voteLimit = party?.votes_per_user || 3;
+    if (userVotes.length >= voteLimit) return;
+
     await supabase.from("votes").insert({
       party_id: partyId,
       user_id: user.id,
@@ -393,18 +396,29 @@ const ViewWatchParty = () => {
 
   const handleRemoveVote = async (movieTmdbId) => {
     const voteToRemove = userVotes.find((v) => v.movieId === movieTmdbId);
-    if (voteToRemove)
-      await supabase.from("votes").delete().eq("id", voteToRemove.voteId);
+    if (!voteToRemove) return;
+
+    // Try to delete the vote from the database
+    const { error } = await supabase
+      .from("votes")
+      .delete()
+      .eq("id", voteToRemove.voteId);
+
+    // If the deletion was successful, refresh the vote data immediately
+    if (!error) {
+      refreshVoteData();
+    }
   };
 
   const handleSuggestMovie = async (movie) => {
-    if (userSuggestionCount >= 2) return;
+    // Use the dynamic value from the party object, with a fallback to 2
+    const suggestionLimit = party?.suggestions_per_user || 2;
+    if (userSuggestionCount >= suggestionLimit) return;
 
-    // Always insert the real username. The display logic will handle privacy.
     await supabase.from("suggestions").insert({
       party_id: partyId,
       user_id: user.id,
-      username: user.user_metadata?.username || "Anonymous", // Store the real name
+      username: user.user_metadata?.username,
       movie_tmdb_id: movie.id,
       movie_title: movie.title,
       movie_year: movie.year,
@@ -457,8 +471,9 @@ const ViewWatchParty = () => {
   const sortedPollMovies = [...(party?.poll_movies || [])].sort(
     (a, b) => (pollVoteCounts[b.id] || 0) - (pollVoteCounts[a.id] || 0)
   );
-  const remainingVotes = 3 - userVotes.length;
-  const remainingSuggestions = 2 - userSuggestionCount;
+  const remainingVotes = (party?.votes_per_user || 3) - userVotes.length;
+  const remainingSuggestions =
+    (party?.suggestions_per_user || 2) - userSuggestionCount;
 
   return (
     <>
