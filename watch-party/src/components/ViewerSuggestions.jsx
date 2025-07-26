@@ -1,14 +1,16 @@
 import React from "react";
 import { PlusCircle } from "lucide-react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 const ViewerSuggestions = ({ suggestions, onMoveToPoll }) => {
+  const [parent] = useAutoAnimate({ duration: 500 });
   return (
     <div className="bg-gray-900 p-4 rounded-lg">
       <h3 className="font-bold text-white mb-4 flex items-center gap-2">
         <PlusCircle size={20} /> Viewer Suggestions
       </h3>
       {suggestions && suggestions.length > 0 ? (
-        <ul className="space-y-2 max-h-100 overflow-y-auto pr-2">
+        <ul className="space-y-2 max-h-100 overflow-y-auto pr-2" ref={parent}>
           {suggestions.map((suggestion) => (
             <li
               key={suggestion.id}

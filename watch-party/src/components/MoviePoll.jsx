@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Vote, PlusCircle, Trash2 } from "lucide-react";
-import { useAutoAnimate } from "@formkit/auto-animate/react"; // Use the hook
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 const MoviePoll = ({
   movies,
@@ -15,7 +15,7 @@ const MoviePoll = ({
   setIsAddingToPoll,
   SearchComponent,
 }) => {
-  const [parent] = useAutoAnimate({ duration: 500 }); // Initialize the hook (500ms is a nice, noticeable duration)
+  const [parent] = useAutoAnimate({ duration: 500 });
 
   const sortedMovies = [...(movies || [])].sort((a, b) => {
     const votesA = voteCounts[a.id] || 0;
@@ -26,7 +26,6 @@ const MoviePoll = ({
   return (
     <div className="bg-gray-900 p-4 rounded-lg">
       <div className="flex justify-between items-center mb-4">
-        {/* ... Header and buttons remain the same ... */}
         <h3 className="font-bold text-white flex items-center gap-2">
           <Vote size={20} /> Movie Poll
         </h3>
@@ -66,6 +65,7 @@ const MoviePoll = ({
         </div>
       </div>
 
+      {/* --- CORRECTED LINE --- */}
       {isVotingOpen && (
         <p className="text-green-400 text-sm mb-3">
           Voting is now open for viewers!
@@ -77,7 +77,7 @@ const MoviePoll = ({
           The movie poll is empty.
         </p>
       ) : (
-        <ul className="space-y-2" ref={parent}>
+        <ul className="space-y-2 max-h-100 overflow-y-auto pr-2" ref={parent}>
           {sortedMovies.map((movie) => (
             <li
               key={movie.id}

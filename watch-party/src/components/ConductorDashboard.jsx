@@ -294,7 +294,7 @@ const ConductorDashboard = () => {
     userProfileRef.current = userProfile;
   }, [userProfile]);
 
-  // --- ADDED BACK: Data refresh functions ---
+  // --- 1. Wrap the refresh functions in useCallback ---
   const refreshVoteCounts = useCallback(async () => {
     if (!partyId) return;
     const { data } = await supabase
@@ -308,24 +308,20 @@ const ConductorDashboard = () => {
         }, {})
       : {};
     setPollVoteCounts(counts);
-  }, [partyId]);
+  }, [partyId]); // This function now only changes if partyId changes
 
   const refreshSuggestionData = useCallback(async () => {
     if (!partyId) return;
-
-    // This query gets all suggestion data, AND joins with profiles
-    // ONLY to get the 'suggest_anonymously' flag.
     const { data, error } = await supabase
       .from("suggestions")
-      .select("*, profiles (suggest_anonymously)") // Note: we are NOT asking for username here
+      .select("*, profiles (suggest_anonymously)")
       .eq("party_id", partyId);
-
     if (error) {
       console.error("Error fetching suggestions with profiles:", error);
     } else if (data) {
       setSuggestions(data);
     }
-  }, [partyId, user]);
+  }, [partyId]); // This function now only changes if partyId changes
 
   // --- UPDATED: useEffect for Realtime and Data Fetching ---
   // --- useEffect for Initial Data Fetching ---
@@ -342,28 +338,17 @@ const ConductorDashboard = () => {
           .eq("id", user.id)
           .single(),
       ]);
-
       if (partyRes.error) setError("Failed to load party details.");
       else setParty(partyRes.data);
-
       if (profileRes.data) setUserProfile(profileRes.data);
-
       await Promise.all([refreshVoteCounts(), refreshSuggestionData()]);
       setLoading(false);
     };
-
     fetchInitialData();
-  }, [partyId, user, refreshVoteCounts, refreshSuggestionData]); // This runs once when these stable functions are created
 
-  useEffect(() => {
-    if (!partyId || !user) return;
-
-    // This is the single channel for the dashboard.
     const partyChannel = supabase.channel(`party:${partyId}`, {
       config: { presence: { key: user.id } },
     });
-
-    // Set up all necessary listeners before subscribing
     partyChannel
       .on(
         "postgres_changes",
@@ -408,18 +393,12 @@ const ConductorDashboard = () => {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles" },
-        (payload) => {
-          console.log(
-            "A profile has been updated, refreshing suggestions...",
-            payload
-          );
-          // Simply re-run the function to get the latest data
+        () => {
           refreshSuggestionData();
         }
       )
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          // Announce presence when connected
           await partyChannel.track({
             user_id: user.id,
             username: user.user_metadata?.username || "Conductor",
@@ -428,11 +407,10 @@ const ConductorDashboard = () => {
         }
       });
 
-    // Cleanup function
     return () => {
       supabase.removeChannel(partyChannel);
     };
-  }, [partyId, user, refreshVoteCounts, refreshSuggestionData]);
+  }, [partyId, user, refreshVoteCounts, refreshSuggestionData]); // The dependency array is now correct and stable
 
   useEffect(() => {
     const fetchAllMovieDetails = async () => {
@@ -514,40 +492,44 @@ const ConductorDashboard = () => {
   };
 
   const handlePlay = () => {
+    // Case 1: A movie is already loaded and just needs to be un-paused.
     if (nowPlayingMovieDetails) {
-      // If resuming a paused movie, calculate the time it was paused.
       const paused_duration = party.last_pause_time
         ? new Date().getTime() - new Date(party.last_pause_time).getTime()
         : 0;
-
-      // Add the paused duration to the original start time to get the new effective start time.
       const new_start_time = new Date(
         new Date(party.playback_start_time).getTime() + paused_duration
       );
 
       updatePartyStatus({
         party_state: { status: "playing" },
-        playback_start_time: new_start_time.toISOString(), // Set the new effective start time
-        last_pause_time: null, // Clear the pause time
+        playback_start_time: new_start_time.toISOString(),
+        last_pause_time: null,
       });
       return;
     }
 
+    // Case 2: No movie is playing, but there is one "Up Next".
     if (upNextMovie) {
       const newPollList = party.poll_movies.filter(
         (movie) => movie.id !== upNextMovie.id
       );
+
+      // --- FIXED: Added missing fields to the update ---
       updatePartyStatus({
         now_playing_tmdb_id: upNextMovie.id,
+        now_playing_title: upNextMovie.title, // This was missing
+        now_playing_image_url: upNextMovie.imageUrl, // This was missing
         poll_movies: newPollList,
         party_state: { status: "playing" },
         up_next_tmdb_id: null,
-        playback_start_time: new Date().toISOString(), // Set the initial start time
+        playback_start_time: new Date().toISOString(),
         last_pause_time: null,
       });
       setUpNextMovie(null);
     } else {
-      setError("No movie is queued up.");
+      // Case 3: No movie is paused and nothing is up next.
+      setError("No movie is queued up. Please select one from the poll.");
       setTimeout(() => setError(""), 5000);
     }
   };

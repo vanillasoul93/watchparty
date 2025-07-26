@@ -15,6 +15,7 @@ import ReviewMovieModal from "./ReviewMovieModal";
 import WatchList from "./WatchList";
 import ShareableLink from "./ShareableLink";
 import { useDebounce } from "../hooks/useDebounce";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -103,6 +104,9 @@ const ViewWatchParty = () => {
   const prevVotingOpen = useRef(false);
   const [intermissionTime, setIntermissionTime] = useState(0);
   const [userProfile, setUserProfile] = useState(null);
+
+  const [pollListRef] = useAutoAnimate({ duration: 500 });
+  const [suggestionsListRef] = useAutoAnimate({ duration: 500 });
 
   // Fetch the user's profile to check their review prompt setting
   useEffect(() => {
@@ -553,7 +557,10 @@ const ViewWatchParty = () => {
                     </span>
                   </div>
                   {party.voting_open ? (
-                    <ul className="space-y-2">
+                    <ul
+                      className="space-y-2 max-h-100 overflow-y-auto pr-2"
+                      ref={pollListRef}
+                    >
                       {sortedPollMovies.map((movie) => (
                         <li
                           key={movie.id}
@@ -611,7 +618,10 @@ const ViewWatchParty = () => {
                       Left
                     </span>
                   </div>
-                  <ul className="space-y-2 mb-4 max-h-100 overflow-y-auto pr-2">
+                  <ul
+                    className="space-y-2 mb-4 max-h-100 overflow-y-auto pr-2"
+                    ref={suggestionsListRef}
+                  >
                     {[...suggestions]
                       .sort(
                         (a, b) =>
