@@ -91,3 +91,64 @@ export const getMovieBackdrops = async (movieId) => {
     return [];
   }
 };
+
+export const getMovieDetailsWithCredits = async (movieId) => {
+  if (!movieId) return null;
+  try {
+    // We add 'videos' to the append_to_response query
+    const response = await fetch(
+      `${tmdbBaseUrl}/movie/${movieId}?api_key=${tmdbApiKey}&append_to_response=credits,videos`
+    );
+    if (!response.ok) throw new Error("Failed to fetch movie details");
+    const data = await response.json();
+
+    // Find the official trailer from the videos results
+    const officialTrailer = data.videos?.results?.find(
+      (vid) => vid.site === "YouTube" && vid.type === "Trailer"
+    );
+
+    // Find the Director and Screenwriter(s)
+    const director = data.credits?.crew?.find(
+      (person) => person.job === "Director"
+    );
+    const screenplay = data.credits?.crew?.filter(
+      (person) => person.job === "Screenplay"
+    );
+
+    return {
+      id: data.id,
+      title: data.title,
+      year: data.release_date ? data.release_date.split("-")[0] : "N/A",
+      imageUrl: data.poster_path
+        ? `https://image.tmdb.org/t/p/w500${data.poster_path}`
+        : "https://placehold.co/300x450/1a202c/ffffff?text=No+Image",
+      backdropUrl: data.backdrop_path
+        ? `https://image.tmdb.org/t/p/w1280${data.backdrop_path}`
+        : null,
+      runtime: data.runtime || 0,
+      description: data.overview,
+      rating: data.vote_average?.toFixed(1),
+      cast:
+        data.credits?.cast.slice(0, 5).map((actor) => ({
+          id: actor.id,
+          name: actor.name,
+          character: actor.character,
+          profileUrl: actor.profile_path
+            ? `https://image.tmdb.org/t/p/w185${actor.profile_path}`
+            : "https://placehold.co/100x100/718096/ffffff?text=NA",
+        })) || [],
+      genres: data.genres || [],
+      trailerUrl: officialTrailer
+        ? `https://www.youtube.com/watch?v=${officialTrailer.key}`
+        : null,
+      budget: data.budget,
+      revenue: data.revenue,
+      originalLanguage: data.original_language,
+      director: director,
+      screenplay: screenplay,
+    };
+  } catch (error) {
+    console.error("Error fetching full movie details:", error);
+    return null;
+  }
+};

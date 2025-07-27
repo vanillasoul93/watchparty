@@ -85,7 +85,6 @@ const DashboardControls = ({
         {playState === "playing" ? (
           <button
             onClick={onPause}
-            disabled={isVotingOpen}
             className="bg-gray-700 p-3 rounded-lg flex flex-col items-center justify-center gap-2 w-full h-full text-yellow-400 hover:bg-yellow-900 disabled:opacity-50"
           >
             <Pause size={24} />
@@ -94,7 +93,6 @@ const DashboardControls = ({
         ) : (
           <button
             onClick={onPlay}
-            disabled={isVotingOpen}
             className="w-full bg-gray-700 p-3 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-green-900 text-green-400 disabled:opacity-50"
           >
             <Play size={24} />

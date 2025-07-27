@@ -1037,6 +1037,7 @@ const ConductorDashboard = () => {
                   playState={party.party_state?.status}
                   intermissionTime={intermissionTime}
                   isConductor={true}
+                  onShowReviewModal={setMovieToReview}
                 />
 
                 <ViewersList viewers={viewers} />

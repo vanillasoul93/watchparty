@@ -524,6 +524,7 @@ const ViewWatchParty = () => {
                   playState={party?.party_state?.status}
                   intermissionTime={intermissionTime}
                   isConductor={user.id === party.conductor_id}
+                  onShowReviewModal={setMovieToReview}
                 />
                 <div className="bg-gray-900 p-4 rounded-lg">
                   <h3 className="font-bold text-white mb-2 flex items-center gap-2">
@@ -546,7 +547,13 @@ const ViewWatchParty = () => {
                 </div>
               </div>
               <div className="md:col-span-2 space-y-8">
-                <div className="bg-gray-900 p-4 rounded-lg">
+                <div
+                  className={`bg-gray-900 p-4 rounded-lg transition-all duration-300 ${
+                    party.voting_open
+                      ? "shadow-lg shadow-indigo-500/40 ring-1 ring-indigo-500/50"
+                      : "shadow-none"
+                  }`}
+                >
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-white flex items-center gap-2">
                       <Vote size={20} /> Movie Poll

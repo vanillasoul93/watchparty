@@ -24,7 +24,13 @@ const MoviePoll = ({
   });
 
   return (
-    <div className="bg-gray-900 p-4 rounded-lg">
+    <div
+      className={`bg-gray-900 p-4 rounded-lg transition-all duration-300 ${
+        isVotingOpen
+          ? "shadow-lg shadow-indigo-500/40 ring-1 ring-indigo-500/50"
+          : "shadow-none"
+      }`}
+    >
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-bold text-white flex items-center gap-2">
           <Vote size={20} /> Movie Poll
