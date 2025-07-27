@@ -18,7 +18,7 @@ const MovieDetailsModal = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-50 p-4 h-screen">
         <div
           className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative bg-cover bg-center"
           style={{
@@ -179,7 +179,7 @@ const MovieDetailsModal = ({
 
       {/* --- NEW: Trailer Popup Overlay --- */}
       {isTrailerOpen && movie.trailerUrl && (
-        <div className="fixed inset-0 bg-gray-900/90 bg-opacity-90 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-gray-900/90 bg-opacity-90 flex items-center justify-center z-[60] p-4 h-screen">
           <div className="relative w-full max-w-screen-lg aspect-video">
             <iframe
               src={`${movie.trailerUrl.replace(
