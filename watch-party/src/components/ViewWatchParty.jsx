@@ -180,7 +180,7 @@ const ViewWatchParty = () => {
     if (!partyId || !user) return;
 
     const joinParty = async () => {
-      await supabase.from("party_viewers").insert(
+      await supabase.from("party_viewers").upsert(
         {
           party_id: partyId,
           user_id: user.id,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
+import { useNavigate } from "react-router-dom"; // 1. Import useNavigate
 import {
   Film,
   Clock,
@@ -132,6 +133,7 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
 
 const CreateWatchParty = () => {
   const { user } = useAuth();
+  const navigate = useNavigate(); // 2. Initialize the navigate function
   const [partyName, setPartyName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [inviteCode, setInviteCode] = useState(null);
@@ -194,6 +196,7 @@ const CreateWatchParty = () => {
       is_public: isPublic,
       invite_code: inviteCode,
       status: "active",
+      party_state: { status: "paused" }, // The playback status starts as 'paused'
       // Static featured movie info
       featured_movie: featuredMovie.title,
       featured_movie_image_url: featuredMovie.imageUrl,
@@ -215,19 +218,23 @@ const CreateWatchParty = () => {
       party_state: { status: "playing" }, // Start in a playing state
     };
 
-    const { error } = await supabase.from("watch_parties").insert([partyData]);
+    // 3. Modify the insert query to get the new party's data back
+    const { data: newParty, error } = await supabase
+      .from("watch_parties")
+      .insert([partyData])
+      .select()
+      .single();
 
     if (error) {
       console.error("Error creating party:", error);
       setFormError("Could not create the watch party. Please try again.");
+      setLoading(false);
     } else {
-      setFormMessage("Success! Your watch party has been created.");
-      setPartyName("");
-      setFeaturedMovie(null);
-      setVotableMovies([]);
-      setVotingEnabled(false);
+      // 4. Redirect to the new dashboard on success
+      if (newParty) {
+        navigate(`/dashboard/${newParty.id}`);
+      }
     }
-    setLoading(false);
   };
 
   return (

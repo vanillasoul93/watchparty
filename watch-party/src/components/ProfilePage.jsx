@@ -243,13 +243,13 @@ const PartyHistoryList = ({ history }) => {
   );
 };
 
-// A new reusable component for the privacy toggles
-const PrivacyToggle = ({ label, isPublic, setIsPublic }) => (
+// MODIFIED: The PrivacyToggle component no longer needs to manage state itself.
+const PrivacyToggle = ({ label, isPublic, onToggle }) => (
   <div className="flex items-center justify-between py-2">
     <label className="text-gray-300">{label}</label>
     <button
       type="button"
-      onClick={() => setIsPublic(!isPublic)}
+      onClick={onToggle}
       className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
         isPublic
           ? "bg-green-500/20 text-green-400"
@@ -268,6 +268,7 @@ const ProfilePage = () => {
 
   // Profile data state
   const [aboutMe, setAboutMe] = useState("");
+  const debouncedAboutMe = useDebounce(aboutMe, 1000);
   const [favoriteMovies, setFavoriteMovies] = useState([]);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -305,6 +306,27 @@ const ProfilePage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // --- 1. NEW: A single, reusable function to update any profile setting ---
+  const updateProfileSetting = async (updates) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", user.id);
+
+    if (error) {
+      setError("Failed to save setting.");
+    } else {
+    }
+  };
+
+  // --- 2. NEW: useEffect to automatically save debounced text ---
+  useEffect(() => {
+    // This check prevents saving the initial empty state on first load
+    if (debouncedAboutMe !== null && aboutMe !== null) {
+      updateProfileSetting({ about_me: debouncedAboutMe });
+    }
+  }, [debouncedAboutMe]);
 
   const handlePasswordReset = async () => {
     setError("");
@@ -391,9 +413,17 @@ const ProfilePage = () => {
     getProfileAndHistory();
   }, [user]); // The dependency array is correct
 
+  const handleToggle = (setter, key, currentValue) => {
+    const newValue = !currentValue;
+    setter(newValue);
+    updateProfileSetting({ [key]: newValue });
+  };
+
   const handleAddFavorite = (movie) => {
     if (favoriteMovies.length < 5) {
-      setFavoriteMovies([...favoriteMovies, movie]);
+      const newFavs = [...favoriteMovies, movie];
+      setFavoriteMovies(newFavs);
+      updateProfileSetting({ favorite_movies: newFavs });
     }
   };
 
@@ -401,6 +431,7 @@ const ProfilePage = () => {
     const newFavs = [...favoriteMovies];
     newFavs.splice(index, 1);
     setFavoriteMovies(newFavs);
+    updateProfileSetting({ favorite_movies: newFavs });
   };
 
   const handleSetTopMovie = (movieTitle) => {
@@ -408,6 +439,9 @@ const ProfilePage = () => {
       ...prevStats,
       most_watched_movie: movieTitle,
     }));
+
+    // 2. Call the update function to save the change to the database
+    updateProfileSetting({ most_watched_movie: movieTitle });
   };
 
   // --- 3. MODIFIED: updateProfile function to save new settings ---
@@ -429,6 +463,8 @@ const ProfilePage = () => {
         is_favorites_public: isFavoritesPublic,
         is_movie_history_public: isMovieHistoryPublic,
         is_party_history_public: isPartyHistoryPublic,
+        prompt_for_reviews: promptForReviews,
+        suggest_anonymously: suggestAnonymously,
         updated_at: new Date(),
       };
       const { error } = await supabase.from("profiles").upsert(updates);
@@ -458,7 +494,7 @@ const ProfilePage = () => {
         data: { publicUrl },
       } = supabase.storage.from("avatars").getPublicUrl(filePath);
       setAvatarUrl(publicUrl);
-      setMessage('Avatar updated! Click "Save Profile" to finalize.');
+      updateProfileSetting({ avatar_url: publicUrl }); // Save the new URL
     } catch (error) {
       setError(error.message);
     } finally {
@@ -504,6 +540,7 @@ const ProfilePage = () => {
 
     setLoading(false);
   };
+
   const handleDragSort = () => {
     const newFavoriteMovies = [...favoriteMovies];
     const draggedItemContent = newFavoriteMovies.splice(dragItem.current, 1)[0];
@@ -511,6 +548,7 @@ const ProfilePage = () => {
     dragItem.current = null;
     dragOverItem.current = null;
     setFavoriteMovies(newFavoriteMovies);
+    updateProfileSetting({ favorite_movies: newFavoriteMovies });
   };
 
   const username = user?.user_metadata?.username || "No username";
@@ -569,13 +607,6 @@ const ProfilePage = () => {
                   disabled={uploading}
                   className="hidden"
                 />
-                <button
-                  onClick={updateProfile}
-                  disabled={loading}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
-                >
-                  <Save size={20} /> {loading ? "Saving..." : "Save Profile"}
-                </button>
               </div>
             </div>
 
@@ -598,27 +629,57 @@ const ProfilePage = () => {
                 <PrivacyToggle
                   label="Profile Visibility"
                   isPublic={isProfilePublic}
-                  setIsPublic={setIsProfilePublic}
+                  onToggle={() =>
+                    handleToggle(
+                      setIsProfilePublic,
+                      "is_profile_public",
+                      isProfilePublic
+                    )
+                  }
                 />
                 <PrivacyToggle
                   label="Show Stats"
                   isPublic={isStatsPublic}
-                  setIsPublic={setIsStatsPublic}
+                  onToggle={() =>
+                    handleToggle(
+                      setIsStatsPublic,
+                      "is_stats_public",
+                      isStatsPublic
+                    )
+                  }
                 />
                 <PrivacyToggle
                   label="Show Favorites"
                   isPublic={isFavoritesPublic}
-                  setIsPublic={setIsFavoritesPublic}
+                  onToggle={() =>
+                    handleToggle(
+                      setIsFavoritesPublic,
+                      "is_favorites_public",
+                      isFavoritesPublic
+                    )
+                  }
                 />
                 <PrivacyToggle
                   label="Show Movie History"
                   isPublic={isMovieHistoryPublic}
-                  setIsPublic={setIsMovieHistoryPublic}
+                  onToggle={() =>
+                    handleToggle(
+                      setIsMovieHistoryPublic,
+                      "is_movie_history_public",
+                      isMovieHistoryPublic
+                    )
+                  }
                 />
                 <PrivacyToggle
                   label="Show Party History"
                   isPublic={isPartyHistoryPublic}
-                  setIsPublic={setIsPartyHistoryPublic}
+                  onToggle={() =>
+                    handleToggle(
+                      setIsPartyHistoryPublic,
+                      "is_party_history_public",
+                      isPartyHistoryPublic
+                    )
+                  }
                 />
               </div>
             </div>
@@ -675,14 +736,6 @@ const ProfilePage = () => {
                   placeholder="Tell us something about yourself..."
                 />
               </div>
-
-              <button
-                onClick={updateProfile}
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
-              >
-                <Save size={20} /> {loading ? "Saving..." : "Save Profile"}
-              </button>
             </div>
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
               <h3 className="text-xl font-bold text-white">Change Password</h3>

@@ -588,8 +588,10 @@ const ConductorsPage = () => {
   const [viewMode, setViewMode] = useState("card"); // 'card', 'compact', or 'list'
 
   // --- 1. fetchParties is now defined outside and wrapped in useCallback ---
+  // --- 1. fetchParties is now defined in the component scope and wrapped in useCallback ---
   const fetchParties = useCallback(async () => {
-    // We don't set loading to true for real-time updates, only the initial load.
+    // We don't set loading to true here because this will be called by the real-time listener.
+    // The main useEffect will handle the initial loading state.
     setError(null);
     const { data, error } = await supabase
       .from("watch_parties")
@@ -600,7 +602,6 @@ const ConductorsPage = () => {
       console.error("Error fetching parties:", error);
       setError(error.message);
     } else if (data && user) {
-      // Ensure user exists before filtering
       const allActive = data.filter((p) => p.status === "active");
       setMyActiveParties(allActive.filter((p) => p.conductor_id === user.id));
       setActivePublicParties(
@@ -612,18 +613,18 @@ const ConductorsPage = () => {
     }
   }, [user]); // It correctly depends on the user object
 
-  // --- 2. A single, unified useEffect for data fetching and subscriptions ---
+  // --- 2. A single, unified useEffect for the initial data load and the subscription ---
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
 
-    // Initial fetch when the component mounts
     setLoading(true);
-    fetchParties().then(() => setLoading(false));
+    fetchParties().then(() => {
+      setLoading(false);
+    });
 
-    // Set up the real-time subscription
     const subscription = supabase
       .channel("public:watch_parties")
       .on(
@@ -631,16 +632,15 @@ const ConductorsPage = () => {
         { event: "*", schema: "public", table: "watch_parties" },
         (payload) => {
           console.log("Party data changed, refreshing list...", payload);
-          fetchParties(); // Re-run the stable fetch function
+          fetchParties();
         }
       )
       .subscribe();
 
-    // Cleanup function
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, [user, fetchParties]); // The dependency array is now correct and stable
+  }, [user, fetchParties]);
 
   const handleJoinPrivateParty = async () => {
     /* ... remains the same ... */
