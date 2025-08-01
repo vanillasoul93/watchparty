@@ -205,7 +205,7 @@ const CreateWatchParty = () => {
       voting_open: votingEnabled,
       scheduled_start_time: scheduleTime,
       actual_start_time: new Date().toISOString(),
-      viewers_count: 1,
+      viewers_count: 0,
       watching_users: [
         {
           userId: user.id,

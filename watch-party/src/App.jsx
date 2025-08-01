@@ -12,6 +12,7 @@ import CreateWatchParty from "./components/CreateWatchParty";
 import Login from "./components/Auth/Login";
 import SignUp from "./components/Auth/SignUp";
 import ConductorsPage from "./components/ConductorsPage";
+import PublicProfilePage from "./components/PublicProfilePage";
 import ProfilePage from "./components/ProfilePage";
 import ConductorDashboard from "./components/ConductorDashboard";
 import ViewWatchParty from "./components/ViewWatchParty";
@@ -59,6 +60,7 @@ const AppContent = () => {
           <Route path="/conductor-hub" element={<ConductorsPage />} />
           <Route path="/create-party" element={<CreateWatchParty />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile/:username" element={<PublicProfilePage />} />
         </Route>
 
         {/* Full-screen routes without Navbar/Footer */}

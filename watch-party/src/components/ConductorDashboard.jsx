@@ -294,40 +294,39 @@ const ConductorDashboard = () => {
     userProfileRef.current = userProfile;
   }, [userProfile]);
 
-  // --- 1. Wrap the refresh functions in useCallback ---
-  const refreshVoteCounts = useCallback(async () => {
-    if (!partyId) return;
-    const { data } = await supabase
-      .from("votes")
-      .select("movie_tmdb_id")
-      .eq("party_id", partyId);
-    const counts = data
-      ? data.reduce((acc, vote) => {
-          acc[vote.movie_tmdb_id] = (acc[vote.movie_tmdb_id] || 0) + 1;
-          return acc;
-        }, {})
-      : {};
-    setPollVoteCounts(counts);
-  }, [partyId]); // This function now only changes if partyId changes
-
-  const refreshSuggestionData = useCallback(async () => {
-    if (!partyId) return;
-    const { data, error } = await supabase
-      .from("suggestions")
-      .select("*, profiles (suggest_anonymously)")
-      .eq("party_id", partyId);
-    if (error) {
-      console.error("Error fetching suggestions with profiles:", error);
-    } else if (data) {
-      setSuggestions(data);
-    }
-  }, [partyId]); // This function now only changes if partyId changes
-
-  // --- UPDATED: useEffect for Realtime and Data Fetching ---
-  // --- useEffect for Initial Data Fetching ---
+  // This single, unified useEffect handles both initial data fetching and all Realtime subscriptions
   useEffect(() => {
     if (!partyId || !user) return;
 
+    // We define the refresh functions INSIDE the useEffect.
+    // This ensures they are always "fresh" for the subscription.
+    const refreshVoteCounts = async () => {
+      const { data } = await supabase
+        .from("votes")
+        .select("movie_tmdb_id")
+        .eq("party_id", partyId);
+      const counts = data
+        ? data.reduce((acc, vote) => {
+            acc[vote.movie_tmdb_id] = (acc[vote.movie_tmdb_id] || 0) + 1;
+            return acc;
+          }, {})
+        : {};
+      setPollVoteCounts(counts);
+    };
+
+    const refreshSuggestionData = async () => {
+      const { data, error } = await supabase
+        .from("suggestions")
+        .select("*, profiles (suggest_anonymously)")
+        .eq("party_id", partyId);
+      if (error) {
+        console.error("Error fetching suggestions:", error);
+      } else if (data) {
+        setSuggestions(data);
+      }
+    };
+
+    // This function fetches all data needed for the initial load.
     const fetchInitialData = async () => {
       setLoading(true);
       const [partyRes, profileRes] = await Promise.all([
@@ -344,8 +343,10 @@ const ConductorDashboard = () => {
       await Promise.all([refreshVoteCounts(), refreshSuggestionData()]);
       setLoading(false);
     };
+
     fetchInitialData();
 
+    // Now, set up the subscription with the locally defined refresh functions.
     const partyChannel = supabase.channel(`party:${partyId}`, {
       config: { presence: { key: user.id } },
     });
@@ -393,9 +394,7 @@ const ConductorDashboard = () => {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles" },
-        () => {
-          refreshSuggestionData();
-        }
+        refreshSuggestionData
       )
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -410,7 +409,37 @@ const ConductorDashboard = () => {
     return () => {
       supabase.removeChannel(partyChannel);
     };
-  }, [partyId, user, refreshVoteCounts, refreshSuggestionData]); // The dependency array is now correct and stable
+  }, [partyId, user]); // This effect re-runs ONLY if the party or user changes.
+
+  // This effect manages adding/removing the conductor from the persistent viewers table,
+  // which in turn triggers the database functions to update the count.
+  useEffect(() => {
+    if (!partyId || !user) return;
+
+    const joinParty = async () => {
+      await supabase.from("party_viewers").insert(
+        {
+          party_id: partyId,
+          user_id: user.id,
+          username: user.user_metadata?.username || "Conductor",
+        },
+        { onConflict: "party_id, user_id" }
+      );
+    };
+
+    joinParty();
+
+    // The return function runs when the component unmounts (conductor leaves the page)
+    return () => {
+      const leaveParty = async () => {
+        await supabase
+          .from("party_viewers")
+          .delete()
+          .match({ party_id: partyId, user_id: user.id });
+      };
+      leaveParty();
+    };
+  }, [partyId, user]);
 
   useEffect(() => {
     const fetchAllMovieDetails = async () => {

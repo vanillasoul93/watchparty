@@ -14,6 +14,7 @@ import { getMovieDetails, searchTMDb } from "../api/tmdb";
 import ReviewMovieModal from "./ReviewMovieModal";
 import WatchList from "./WatchList";
 import ShareableLink from "./ShareableLink";
+import ViewersList from "./ViewersList";
 import { useDebounce } from "../hooks/useDebounce";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
@@ -515,35 +516,24 @@ const ViewWatchParty = () => {
           )}
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid md:grid-cols-3 gap-8">
-              <div className="md:col-span-1 space-y-6">
-                <WatchList
-                  party={party}
-                  watchedMovies={watchedMovieDetails}
-                  nowPlaying={nowPlayingMovieDetails}
-                  upNext={upNextMovieDetails}
-                  playState={party?.party_state?.status}
-                  intermissionTime={intermissionTime}
-                  isConductor={user.id === party.conductor_id}
-                  onShowReviewModal={setMovieToReview}
-                />
-                <div className="bg-gray-900 p-4 rounded-lg">
-                  <h3 className="font-bold text-white mb-2 flex items-center gap-2">
-                    <Users size={20} /> Viewers ({viewers.length})
-                  </h3>
-                  <ul className="space-y-1">
-                    {viewers.map((viewer) => (
-                      <li
-                        key={viewer.user_id}
-                        className={
-                          viewer.is_conductor
-                            ? "font-bold text-indigo-400"
-                            : "text-gray-300"
-                        }
-                      >
-                        {viewer.username}
-                      </li>
-                    ))}
-                  </ul>
+              {/* --- MODIFIED: Added flex flex-col to the column wrapper --- */}
+              <div className="md:col-span-1 space-y-6 flex flex-col">
+                {/* --- ADDED: A wrapper with min-h-0 around WatchList --- */}
+                <div className="flex-grow min-h-0">
+                  <WatchList
+                    party={party}
+                    watchedMovies={watchedMovieDetails}
+                    nowPlaying={nowPlayingMovieDetails}
+                    upNext={upNextMovieDetails}
+                    playState={party?.party_state?.status}
+                    intermissionTime={intermissionTime}
+                    isConductor={user.id === party.conductor_id}
+                    onShowReviewModal={setMovieToReview}
+                  />
+                </div>
+
+                <div className="bg-gray-900 p-4 rounded-lg flex-shrink-0">
+                  <ViewersList viewers={viewers} />
                 </div>
               </div>
               <div className="md:col-span-2 space-y-8">
@@ -652,14 +642,14 @@ const ViewWatchParty = () => {
                               <img
                                 src={suggestion.movie_image_url}
                                 alt={suggestion.movie_title}
-                                className="w-10 h-16 object-cover rounded"
+                                className="w-14 h-20 object-cover rounded"
                               />
                               <div className="flex flex-col">
-                                <span className="text-gray-300">
+                                <span className="text-gray-300 text-xl pb-0.5">
                                   {suggestion.movie_title} (
                                   {suggestion.movie_year})
                                 </span>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-sm text-gray-500">
                                   Suggested by:{" "}
                                   {
                                     // Check the privacy flag from the joined profiles table.

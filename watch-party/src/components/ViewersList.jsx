@@ -1,24 +1,36 @@
 import React from "react";
-import { Users } from "lucide-react";
+import { Users, User } from "lucide-react"; // Import the User icon
+import { Link } from "react-router-dom";
 
 const ViewersList = ({ viewers }) => {
   return (
-    <div className="bg-gray-900 p-4 rounded-lg">
-      <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+    <div className="bg-gray-900 p-4 rounded-lg flex flex-col h-full">
+      <h3 className="font-bold text-white mb-2 flex items-center gap-2 flex-shrink-0">
         <Users size={20} /> Viewers ({viewers?.length || 0})
       </h3>
-      <ul className="space-y-1">
+
+      <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
         {viewers?.map((viewer) => (
-          // The 'key' prop is added here
-          <li
-            key={viewer.user_id}
-            className={
-              viewer.is_conductor
-                ? "font-bold text-indigo-400"
-                : "text-gray-300"
-            }
-          >
-            {viewer.username}
+          <li key={viewer.user_id}>
+            <Link
+              to={`/profile/${viewer.username}`}
+              className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-700 transition-colors"
+              title="View Profile" // Tooltip for the hover text
+            >
+              <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
+                <User size={20} className="text-gray-400" />
+              </div>
+
+              <span
+                className={`truncate ${
+                  viewer.is_conductor
+                    ? "font-bold text-indigo-400"
+                    : "text-gray-300"
+                }`}
+              >
+                {viewer.username}
+              </span>
+            </Link>
           </li>
         ))}
       </ul>

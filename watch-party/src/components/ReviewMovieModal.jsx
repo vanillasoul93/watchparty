@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Star, X } from "lucide-react";
+import { getMovieDetailsWithCredits } from "../api/tmdb"; // We'll fetch details for the backdrop
 
-// --- NEW and Improved StarRating Component ---
+// --- StarRating Component remains the same ---
 const StarRating = ({ rating, setRating }) => {
   const [hoverRating, setHoverRating] = useState(0);
 
@@ -17,18 +18,14 @@ const StarRating = ({ rating, setRating }) => {
           <div
             key={starIndex}
             className="relative cursor-pointer"
-            // 1. Detect which half of the star is being hovered over
             onMouseMove={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const isLeftHalf = e.clientX - rect.left < rect.width / 2;
               setHoverRating(isLeftHalf ? starIndex - 0.5 : starIndex);
             }}
-            // 2. Set the rating on click
             onClick={() => setRating(hoverRating)}
           >
             <Star size={40} className="text-gray-600" />
-
-            {/* 3. This div handles the partial or full fill */}
             <div
               className="absolute top-0 left-0 h-full overflow-hidden"
               style={{ width: isHalf ? "50%" : isFilled ? "100%" : "0%" }}
@@ -49,63 +46,93 @@ const StarRating = ({ rating, setRating }) => {
 const ReviewMovieModal = ({ movie, onSave, onClose, onAddToFavorites }) => {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
+  const [backdropUrl, setBackdropUrl] = useState("");
+
+  // Fetch movie details to get a backdrop image for the modal
+  useEffect(() => {
+    const fetchBackdrop = async () => {
+      if (movie) {
+        const details = await getMovieDetailsWithCredits(movie.id);
+        if (details?.backdropUrl) {
+          setBackdropUrl(details.backdropUrl);
+        }
+      }
+    };
+    fetchBackdrop();
+  }, [movie]);
 
   const handleSave = () => {
     onSave({ rating, review });
   };
 
+  if (!movie) return null;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl relative">
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 h-screen">
+      <div
+        className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative bg-cover bg-center"
+        style={{
+          backgroundImage: `linear-gradient(rgba(17, 24, 39, 0.9), rgba(17, 24, 39, 1)), url(${backdropUrl})`,
+        }}
+      >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white z-20"
         >
-          <X size={24} />
+          <X size={28} />
         </button>
 
-        <h2 className="text-2xl font-bold text-white mb-2">Movie Finished!</h2>
-        <p className="text-gray-400 mb-6">
-          Would you like to add "{movie.title}" to your watch history?
-        </p>
+        <div className="p-8 md:p-12">
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-1">
+              <img
+                src={movie.imageUrl}
+                alt={movie.title}
+                className="w-full h-auto object-cover rounded-lg shadow-2xl"
+              />
+            </div>
+            <div className="md:col-span-2 text-white flex flex-col">
+              <h2 className="text-3xl font-bold mb-2">Movie Finished!</h2>
+              <p className="text-gray-400 mb-6">
+                Log your thoughts for "{movie.title}"
+              </p>
 
-        <div className="flex flex-col md:flex-row gap-6 mb-6">
-          <img
-            src={movie.imageUrl}
-            alt={movie.title}
-            className="w-32 h-48 object-cover rounded-md mx-auto md:mx-0"
-          />
-          <div className="flex flex-col items-center md:items-start flex-grow gap-4">
-            <p className="text-lg font-semibold text-white">Your Rating</p>
-            <StarRating rating={rating} setRating={setRating} />
-            <textarea
-              value={review}
-              onChange={(e) => setReview(e.target.value)}
-              placeholder="Write a short review... (optional)"
-              className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 h-24 mt-2"
-            />
+              <div className="space-y-6 flex-grow">
+                <div>
+                  <label className="block text-lg font-semibold text-white mb-2">
+                    Your Rating
+                  </label>
+                  <StarRating rating={rating} setRating={setRating} />
+                </div>
+                <div>
+                  <label className="block text-lg font-semibold text-white mb-2">
+                    Your Review
+                  </label>
+                  <textarea
+                    value={review}
+                    onChange={(e) => setReview(e.target.value)}
+                    placeholder="Write a short review... (optional)"
+                    className="w-full bg-gray-800/50 border-2 border-gray-700 text-white rounded-lg p-3 h-28"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-8">
+                <button
+                  onClick={handleSave}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg"
+                >
+                  Save to My Watch History
+                </button>
+                <button
+                  onClick={onAddToFavorites}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg"
+                >
+                  Add to Favorites
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div className="space-y-3">
-          <button
-            onClick={handleSave}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg"
-          >
-            Save to My Watch History
-          </button>
-          <button
-            onClick={onAddToFavorites}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg"
-          >
-            Add to Favorites
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
-          >
-            Dismiss
-          </button>
         </div>
       </div>
     </div>

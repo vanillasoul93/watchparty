@@ -31,7 +31,7 @@ export default function HowItWorks() {
                 Conduct or Join a Watch Party
               </h3>
               <p className="text-gray-400">
-                Conduct your own Watch Party, Review your favorite movies with
+                Conduct your own Watch Party, review your favorite movies with
                 your friends, or meet new people and join a room.
               </p>
             </div>

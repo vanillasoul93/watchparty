@@ -14,8 +14,13 @@ import {
   PlusCircle,
   Star,
   History,
+  Eye,
+  EyeOff,
+  Search,
   Users as PartyIcon,
 } from "lucide-react";
+import { searchTMDb } from "../api/tmdb"; // Assuming your centralized search is here
+import { useDebounce } from "../hooks/useDebounce"; // Assuming you have this hook
 
 // Helper component to render stars from a numeric rating
 const DisplayRating = ({ rating }) => {
@@ -44,6 +49,132 @@ const DisplayRating = ({ rating }) => {
           fill="currentColor"
         />
       ))}
+    </div>
+  );
+};
+
+const FavoriteMovieCard = ({
+  movie,
+  index,
+  onRemove,
+  onSetTop,
+  isTop,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  isDragging,
+}) => {
+  const ranking = ["1", "2", "3", "4", "5"][index];
+  return (
+    <div
+      draggable="true"
+      onDragStart={onDragStart}
+      onDragEnter={onDragEnter}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => e.preventDefault()}
+      className={`relative group bg-gray-700 rounded-lg cursor-grab transition-opacity w-32 flex-shrink-0 ${
+        isDragging ? "opacity-30" : "opacity-100"
+      }`}
+    >
+      <img
+        src={movie.imageUrl}
+        alt={movie.title}
+        className="w-full h-48 object-cover rounded-lg"
+      />
+      <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col p-2 text-center justify-end">
+        <h4 className="font-bold text-white text-sm">{movie.title}</h4>
+        <p className="text-xs text-gray-400">{movie.year}</p>
+      </div>
+      <div
+        className={`absolute top-1 left-1 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold transition-colors ${
+          isTop ? "bg-yellow-400 text-black" : ""
+        }`}
+      >
+        {ranking}
+      </div>
+      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 flex flex-col gap-1">
+        <button
+          onClick={() => onSetTop(movie.title)}
+          className={`p-1.5 bg-black/50 rounded-full transition-colors ${
+            isTop ? "text-yellow-400" : "text-gray-400 hover:text-yellow-400"
+          }`}
+        >
+          <Star size={14} />
+        </button>
+        <button
+          onClick={() => onRemove(index)}
+          className="p-1.5 bg-black/50 text-gray-400 hover:text-red-500 rounded-full transition-colors"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const AddFavoriteMovie = ({ onAdd, existingFavorites = [] }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  useEffect(() => {
+    const search = async () => {
+      if (debouncedSearchTerm.length < 2) {
+        setResults([]);
+        return;
+      }
+      setLoading(true);
+      const searchResults = await searchTMDb(debouncedSearchTerm);
+      // Correctly get existing IDs from the prop
+      const existingIds = existingFavorites.map((fav) => fav.id);
+      setResults(searchResults.filter((res) => !existingIds.includes(res.id)));
+      setLoading(false);
+    };
+    search();
+  }, [debouncedSearchTerm, existingFavorites]); // Added existingFavorites to the dependency array
+
+  const handleSelectMovie = (movie) => {
+    onAdd(movie);
+    setSearchTerm("");
+    setResults([]);
+  };
+
+  return (
+    <div className="relative w-full">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Search className="text-gray-400" size={20} />
+      </div>
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
+        placeholder="Search to add a favorite..."
+      />
+      {loading && (
+        <p className="text-sm text-gray-400 mt-1 pl-2">Searching...</p>
+      )}
+      {results.length > 0 && (
+        <ul className="absolute z-10 w-full bg-gray-800 border-2 border-gray-700 rounded-lg mt-1 max-h-60 overflow-y-auto">
+          {results.map((movie) => (
+            <li
+              key={movie.id}
+              onClick={() => handleSelectMovie(movie)}
+              className="px-3 py-2 text-white hover:bg-indigo-600 cursor-pointer flex items-center gap-2 text-sm"
+            >
+              <img
+                src={movie.imageUrl}
+                alt={movie.title}
+                className="w-8 h-12 object-cover rounded"
+              />
+              <span className="flex-grow">
+                {movie.title} ({movie.year})
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };
@@ -112,6 +243,25 @@ const PartyHistoryList = ({ history }) => {
   );
 };
 
+// A new reusable component for the privacy toggles
+const PrivacyToggle = ({ label, isPublic, setIsPublic }) => (
+  <div className="flex items-center justify-between py-2">
+    <label className="text-gray-300">{label}</label>
+    <button
+      type="button"
+      onClick={() => setIsPublic(!isPublic)}
+      className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+        isPublic
+          ? "bg-green-500/20 text-green-400"
+          : "bg-gray-700 text-gray-400"
+      }`}
+    >
+      {isPublic ? <Eye size={14} /> : <EyeOff size={14} />}
+      {isPublic ? "Public" : "Private"}
+    </button>
+  </div>
+);
+
 const ProfilePage = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -129,6 +279,10 @@ const ProfilePage = () => {
   //State setting if a user wants review prompts.
   const [promptForReviews, setPromptForReviews] = useState(true);
 
+  // State for Drag and Drop
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
+
   // State for profile stats
   const [profileStats, setProfileStats] = useState({
     movies_watched_count: 0,
@@ -136,12 +290,36 @@ const ProfilePage = () => {
     most_watched_movie: "N/A",
   });
 
+  // --- 1. NEW: State for all privacy settings ---
+  const [isProfilePublic, setIsProfilePublic] = useState(true);
+  const [isStatsPublic, setIsStatsPublic] = useState(true);
+  const [isFavoritesPublic, setIsFavoritesPublic] = useState(true);
+  const [isMovieHistoryPublic, setIsMovieHistoryPublic] = useState(true);
+  const [isPartyHistoryPublic, setIsPartyHistoryPublic] = useState(true);
+
   const [suggestAnonymously, setSuggestAnonymously] = useState(false);
 
   // State for UI feedback and functionality
-  const [password, setPassword] = useState("");
+  // Replace the old 'password' state with these two
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const handlePasswordReset = async () => {
+    setError("");
+    setMessage("");
+
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: window.location.origin, // Redirects back to your app
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setMessage("Password reset email sent! Please check your inbox.");
+    }
+  };
 
   useEffect(() => {
     const getProfileAndHistory = async () => {
@@ -152,12 +330,7 @@ const ProfilePage = () => {
         // Fetch profile, movie history, and party history concurrently
         const [profileRes, movieHistoryRes, partyHistoryRes] =
           await Promise.all([
-            supabase
-              .from("profiles")
-              // --- MODIFIED: Add 'suggest_anonymously' to the select query ---
-              .select("*, prompt_for_reviews, suggest_anonymously")
-              .eq("id", user.id)
-              .single(),
+            supabase.from("profiles").select("*").eq("id", user.id).single(),
             supabase
               .from("movie_watch_history")
               .select("*")
@@ -172,22 +345,33 @@ const ProfilePage = () => {
         // Process profile data
         if (profileRes.error && profileRes.error.code !== "PGRST116")
           throw profileRes.error;
+
         if (profileRes.data) {
           setAboutMe(profileRes.data.about_me || "");
           setAvatarUrl(profileRes.data.avatar_url);
           setPromptForReviews(profileRes.data.prompt_for_reviews);
-          // --- ADDED: Set the state for the new toggle ---
-          setSuggestAnonymously(profileRes.data.suggest_anonymously);
           setFavoriteMovies(
             Array.isArray(profileRes.data.favorite_movies)
               ? profileRes.data.favorite_movies
               : []
           );
+
+          // --- THIS IS THE FIX ---
+          // The profile stats are now correctly set from the fetched data.
           setProfileStats({
             movies_watched_count: profileRes.data.movies_watched_count || 0,
             movies_conducted_count: profileRes.data.movies_conducted_count || 0,
             most_watched_movie: profileRes.data.most_watched_movie || "N/A",
           });
+          // --- END FIX ---
+
+          // Set all the new privacy states
+          setIsProfilePublic(profileRes.data.is_profile_public);
+          setIsStatsPublic(profileRes.data.is_stats_public);
+          setIsFavoritesPublic(profileRes.data.is_favorites_public);
+          setIsMovieHistoryPublic(profileRes.data.is_movie_history_public);
+          setIsPartyHistoryPublic(profileRes.data.is_party_history_public);
+          setSuggestAnonymously(profileRes.data.suggest_anonymously);
         }
 
         // Process movie history data
@@ -205,8 +389,28 @@ const ProfilePage = () => {
       }
     };
     getProfileAndHistory();
-  }, [user]);
+  }, [user]); // The dependency array is correct
 
+  const handleAddFavorite = (movie) => {
+    if (favoriteMovies.length < 5) {
+      setFavoriteMovies([...favoriteMovies, movie]);
+    }
+  };
+
+  const handleRemoveFavorite = (index) => {
+    const newFavs = [...favoriteMovies];
+    newFavs.splice(index, 1);
+    setFavoriteMovies(newFavs);
+  };
+
+  const handleSetTopMovie = (movieTitle) => {
+    setProfileStats((prevStats) => ({
+      ...prevStats,
+      most_watched_movie: movieTitle,
+    }));
+  };
+
+  // --- 3. MODIFIED: updateProfile function to save new settings ---
   const updateProfile = async () => {
     try {
       setLoading(true);
@@ -215,9 +419,16 @@ const ProfilePage = () => {
       const updates = {
         id: user.id,
         about_me: aboutMe,
+        favorite_movies: favoriteMovies, // Save the list of favorites
+        most_watched_movie: profileStats.most_watched_movie, // Save the top movie
+        favorite_movies: favoriteMovies,
         avatar_url: avatarUrl,
-        prompt_for_reviews: promptForReviews,
-        suggest_anonymously: suggestAnonymously,
+        // Add all the new privacy settings to the update object
+        is_profile_public: isProfilePublic,
+        is_stats_public: isStatsPublic,
+        is_favorites_public: isFavoritesPublic,
+        is_movie_history_public: isMovieHistoryPublic,
+        is_party_history_public: isPartyHistoryPublic,
         updated_at: new Date(),
       };
       const { error } = await supabase.from("profiles").upsert(updates);
@@ -258,21 +469,48 @@ const ProfilePage = () => {
   const updatePassword = async () => {
     setError("");
     setMessage("");
-    if (!password) {
-      setError("Please enter a new password.");
+
+    if (!currentPassword || !newPassword) {
+      setError("Please fill out both password fields.");
       return;
     }
+
     setLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: password });
-      if (error) throw error;
-      setMessage("Password updated successfully!");
-      setPassword("");
-    } catch (error) {
-      setError(error.message);
-    } finally {
+
+    // First, verify the current password is correct by trying to sign in with it.
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      setError("Your current password is not correct.");
       setLoading(false);
+      return;
     }
+
+    // If the current password was correct, proceed to update the user's password.
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setMessage("Password updated successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+    }
+
+    setLoading(false);
+  };
+  const handleDragSort = () => {
+    const newFavoriteMovies = [...favoriteMovies];
+    const draggedItemContent = newFavoriteMovies.splice(dragItem.current, 1)[0];
+    newFavoriteMovies.splice(dragOverItem.current, 0, draggedItemContent);
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setFavoriteMovies(newFavoriteMovies);
   };
 
   const username = user?.user_metadata?.username || "No username";
@@ -316,20 +554,29 @@ const ProfilePage = () => {
                   className="w-48 h-48 rounded-full object-cover border-4 border-indigo-500"
                 />
               </div>
-              <label
-                htmlFor="avatar-upload"
-                className="cursor-pointer w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition"
-              >
-                {uploading ? "Uploading..." : "Upload Image"}
-              </label>
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/*"
-                onChange={uploadAvatar}
-                disabled={uploading}
-                className="hidden"
-              />
+              <div className="flex w-50 gap-4 flex-col">
+                <label
+                  htmlFor="avatar-upload"
+                  className="cursor-pointer w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition"
+                >
+                  {uploading ? "Uploading..." : "Upload Image"}
+                </label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={uploadAvatar}
+                  disabled={uploading}
+                  className="hidden"
+                />
+                <button
+                  onClick={updateProfile}
+                  disabled={loading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
+                >
+                  <Save size={20} /> {loading ? "Saving..." : "Save Profile"}
+                </button>
+              </div>
             </div>
 
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
@@ -342,62 +589,39 @@ const ProfilePage = () => {
                 <p className="text-lg text-white truncate">{userEmail}</p>
               </div>
             </div>
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
-              <h3 className="text-xl font-bold text-white">Change Password</h3>
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                >
-                  New Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3"
+            {/* --- 4. NEW: Privacy Settings Card --- */}
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-white mb-2">
+                Privacy Settings
+              </h3>
+              <div className="divide-y divide-gray-700">
+                <PrivacyToggle
+                  label="Profile Visibility"
+                  isPublic={isProfilePublic}
+                  setIsPublic={setIsProfilePublic}
+                />
+                <PrivacyToggle
+                  label="Show Stats"
+                  isPublic={isStatsPublic}
+                  setIsPublic={setIsStatsPublic}
+                />
+                <PrivacyToggle
+                  label="Show Favorites"
+                  isPublic={isFavoritesPublic}
+                  setIsPublic={setIsFavoritesPublic}
+                />
+                <PrivacyToggle
+                  label="Show Movie History"
+                  isPublic={isMovieHistoryPublic}
+                  setIsPublic={setIsMovieHistoryPublic}
+                />
+                <PrivacyToggle
+                  label="Show Party History"
+                  isPublic={isPartyHistoryPublic}
+                  setIsPublic={setIsPartyHistoryPublic}
                 />
               </div>
-              <button
-                onClick={updatePassword}
-                disabled={loading}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
-              >
-                <Lock size={20} /> Update Password
-              </button>
             </div>
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <PartyIcon /> Party History
-              </h3>
-              <PartyHistoryList history={partyHistory} />
-            </div>
-          </div>
-
-          <div className="lg:col-span-2 space-y-8">
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
-              <h3 className="text-xl font-bold text-white">Your Stats</h3>
-              <div className="flex items-center gap-4">
-                <Clapperboard className="text-indigo-400" size={24} />
-                <p className="text-lg text-white">
-                  {profileStats.movies_conducted_count} parties conducted
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <Film className="text-indigo-400" size={24} />
-                <p className="text-lg text-white">
-                  {profileStats.movies_watched_count} movies watched
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <Award className="text-indigo-400" size={24} />
-                <p className="text-lg text-white">
-                  Top Movie: {profileStats.most_watched_movie}
-                </p>
-              </div>
-            </div>
-
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
               {/* --- NEW Suggest Anonymously Toggle --- */}
               <div className="flex items-center justify-between">
@@ -460,12 +684,128 @@ const ProfilePage = () => {
                 <Save size={20} /> {loading ? "Saving..." : "Save Profile"}
               </button>
             </div>
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
+              <h3 className="text-xl font-bold text-white">Change Password</h3>
+              <div>
+                <label
+                  htmlFor="currentPassword"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  Current Password
+                </label>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="newPassword"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  New Password
+                </label>
+                <input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3"
+                />
+              </div>
+              <button
+                onClick={updatePassword}
+                disabled={loading}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
+              >
+                <Lock size={20} /> Update Password
+              </button>
+              <div className="text-center">
+                <button
+                  onClick={handlePasswordReset}
+                  className="text-sm text-indigo-400 hover:underline"
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
+              <h3 className="text-xl font-bold text-white">Your Stats</h3>
+              <div className="flex items-center gap-4">
+                <Clapperboard className="text-indigo-400" size={24} />
+                <p className="text-lg text-white">
+                  {profileStats.movies_conducted_count} parties conducted
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <Film className="text-indigo-400" size={24} />
+                <p className="text-lg text-white">
+                  {profileStats.movies_watched_count} movies watched
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <Award className="text-indigo-400" size={24} />
+                <p className="text-lg text-white">
+                  Top Movie: {profileStats.most_watched_movie}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
+              <div>
+                <label className="block text-xl font-bold text-white mb-2">
+                  Top 5 Favorite Movies
+                </label>
+                <p className="text-sm text-gray-400 mb-4">
+                  Drag and drop to reorder your favorites. Click the star to set
+                  your top movie.
+                </p>
+                {/* --- CORRECTED LAYOUT --- */}
+                <div className="flex items-start gap-4 overflow-x-auto pb-4">
+                  {favoriteMovies.map((movie, index) => (
+                    <FavoriteMovieCard
+                      key={movie.id || index}
+                      movie={movie}
+                      index={index}
+                      onRemove={handleRemoveFavorite}
+                      onSetTop={handleSetTopMovie}
+                      isTop={profileStats.most_watched_movie === movie.title}
+                      onDragStart={() => (dragItem.current = index)}
+                      onDragEnter={() => (dragOverItem.current = index)}
+                      onDragEnd={handleDragSort}
+                      isDragging={dragItem.current === index}
+                    />
+                  ))}
+                </div>
+
+                {favoriteMovies.length < 5 && (
+                  <div className="mt-4">
+                    <AddFavoriteMovie
+                      onAdd={handleAddFavorite}
+                      existingFavorites={favoriteMovies} // Pass the correct prop
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
               <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <History /> Movie Watch History
               </h3>
               <MovieHistoryList history={movieHistory} />
+            </div>
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <PartyIcon /> Party History
+              </h3>
+              <PartyHistoryList history={partyHistory} />
             </div>
           </div>
         </div>
