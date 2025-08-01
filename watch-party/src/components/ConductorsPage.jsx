@@ -649,7 +649,6 @@ const ConductorsPage = () => {
   // Helper to choose the right card component based on viewMode
   const renderPartyCard = (party, isConcluded = false) => {
     const props = {
-      key: party.id,
       party,
       currentUser: user,
       onCrashParty: handleCrashParty,
@@ -659,13 +658,13 @@ const ConductorsPage = () => {
     };
     switch (viewMode) {
       case "compact":
-        return <CompactPartyCard {...props} />;
+        return <CompactPartyCard key={party.id} {...props} />;
       case "list":
-        return <ListPartyCard {...props} />;
+        return <ListPartyCard key={party.id} {...props} />;
       case "card":
       default:
         // The PartyCard no longer needs a special wrapper
-        return <PartyCard {...props} />;
+        return <PartyCard key={party.id} {...props} />;
     }
   };
 
