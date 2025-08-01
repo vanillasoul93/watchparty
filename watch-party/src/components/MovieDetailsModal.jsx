@@ -20,7 +20,7 @@ const MovieDetailsModal = ({
     <>
       <div className="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-50 p-4 h-screen">
         <div
-          className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative bg-cover bg-center"
+          className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative bg-cover bg-center shadow-2xl shadow-black/60"
           style={{
             backgroundImage: `linear-gradient(rgba(17, 24, 39, 0.9), rgba(17, 24, 39, 1)), url(${movie.backdropUrl})`,
           }}

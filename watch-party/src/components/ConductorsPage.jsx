@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
 import { useNavigate } from "react-router-dom";
@@ -587,7 +587,6 @@ const ConductorsPage = () => {
 
   const [viewMode, setViewMode] = useState("card"); // 'card', 'compact', or 'list'
 
-  // --- 1. fetchParties is now defined outside and wrapped in useCallback ---
   // --- 1. fetchParties is now defined in the component scope and wrapped in useCallback ---
   const fetchParties = useCallback(async () => {
     // We don't set loading to true here because this will be called by the real-time listener.
@@ -698,6 +697,16 @@ const ConductorsPage = () => {
   if (error)
     return <div className="text-center text-red-500 pt-40">Error: {error}</div>;
 
+  // 3. Create a new handler for tab clicks
+  const handleTabClick = (tabName) => {
+    setActiveTab(tabName);
+    // Scroll the content area into view with a smooth behavior
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
   return (
     <>
       {showJoinModal && <div /* ... Modal JSX ... */ />}
@@ -750,10 +759,10 @@ const ConductorsPage = () => {
           </div>
 
           {/* --- NEW: Tab Navigation --- */}
-          <div className="mb-8 border-b border-gray-700">
+          <div className="sticky top-17 z-60  bg-gray-900/80 backdrop-blur-sm p-4 shadow-lg mb-8 border-b border-gray-700">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
               <button
-                onClick={() => setActiveTab("conducting")}
+                onClick={() => handleTabClick("conducting")}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === "conducting"
                     ? "border-indigo-500 text-indigo-400"
@@ -763,7 +772,7 @@ const ConductorsPage = () => {
                 Conducting ({myActiveParties.length})
               </button>
               <button
-                onClick={() => setActiveTab("active")}
+                onClick={() => handleTabClick("active")}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === "active"
                     ? "border-green-500 text-green-400"
@@ -773,10 +782,10 @@ const ConductorsPage = () => {
                 Active Public Parties ({activePublicParties.length})
               </button>
               <button
-                onClick={() => setActiveTab("concluded")}
+                onClick={() => handleTabClick("concluded")}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === "concluded"
-                    ? "border-gray-500 text-gray-300"
+                    ? "border-amber-500 text-amber-400"
                     : "border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500"
                 }`}
               >
@@ -795,7 +804,7 @@ const ConductorsPage = () => {
                 {myActiveParties.length > 0 ? (
                   // --- This container now handles all three view modes vertically ---
                   <div
-                    className={`max-h-[500px] overflow-y-auto pr-2 ${
+                    className={`max-h-screen overflow-y-auto pr-2 ${
                       viewMode === "list"
                         ? "space-y-3"
                         : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
@@ -815,6 +824,9 @@ const ConductorsPage = () => {
 
             {activeTab === "active" && (
               <section>
+                <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-green-500 pl-4 flex items-center gap-3">
+                  <Vote size={28} /> Active
+                </h2>
                 {activePublicParties.length > 0 ? (
                   <div
                     className={
@@ -837,6 +849,9 @@ const ConductorsPage = () => {
 
             {activeTab === "concluded" && (
               <section>
+                <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-amber-500 pl-4 flex items-center gap-3">
+                  <Timer size={28} /> Recently Concluded
+                </h2>
                 {concludedParties.length > 0 ? (
                   <div
                     className={

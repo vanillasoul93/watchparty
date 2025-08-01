@@ -2,7 +2,7 @@ import React from "react";
 import { PlusCircle } from "lucide-react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
-const ViewerSuggestions = ({ suggestions, onMoveToPoll }) => {
+const ViewerSuggestions = ({ suggestions, onMoveToPoll, onSelectMovie }) => {
   const [parent] = useAutoAnimate({ duration: 500 });
   return (
     <div className="bg-gray-900 p-4 rounded-lg">
@@ -10,17 +10,20 @@ const ViewerSuggestions = ({ suggestions, onMoveToPoll }) => {
         <PlusCircle size={20} /> Viewer Suggestions
       </h3>
       {suggestions && suggestions.length > 0 ? (
-        <ul className="space-y-2 max-h-100 overflow-y-auto pr-2" ref={parent}>
+        <ul className="space-y-2 max-h-100 overflow-y-auto p-1" ref={parent}>
           {suggestions.map((suggestion) => (
             <li
               key={suggestion.id}
-              className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
+              className="bg-gray-800 p-3 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
             >
-              <div className="flex items-center gap-4">
+              <div
+                onClick={() => onSelectMovie(suggestion.movie_tmdb_id)}
+                className="flex items-center gap-4 cursor-pointer"
+              >
                 <img
                   src={suggestion.movie_image_url}
                   alt={suggestion.movie_title}
-                  className="w-10 h-16 object-cover rounded"
+                  className="w-14 h-[88px] object-cover rounded"
                 />
                 <div className="flex flex-col">
                   <span className="text-gray-300">

@@ -2,10 +2,15 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
 import { useParams, useNavigate } from "react-router-dom";
-import { getMovieDetails, searchTMDb } from "../api/tmdb";
+import {
+  getMovieDetails,
+  searchTMDb,
+  getMovieDetailsWithCredits,
+} from "../api/tmdb";
 import WatchList from "./WatchList";
 import VerticalDashboardControls from "./VerticalDashboardControls";
 import MoviePoll from "./MoviePoll";
+import MovieDetailsModal from "./MovieDetailsModal";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
 import ReviewMovieModal from "./ReviewMovieModal";
@@ -227,7 +232,7 @@ const PartySettings = ({ party, onUpdate }) => {
       <div>
         <button
           onClick={handleSave}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg mt-6"
         >
           Save Settings
         </button>
@@ -264,6 +269,28 @@ const ConductorDashboard = () => {
   // --- NEW STATE for inline editing the party title ---
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [partyTitleInput, setPartyTitleInput] = useState("");
+  const [selectedMovieId, setSelectedMovieId] = useState(null);
+  const [modalMovieData, setModalMovieData] = useState(null);
+  const [loadingModal, setLoadingModal] = useState(false);
+
+  useEffect(() => {
+    const fetchModalData = async () => {
+      if (selectedMovieId) {
+        setLoadingModal(true);
+        const fullDetails = await getMovieDetailsWithCredits(selectedMovieId);
+        setModalMovieData(fullDetails);
+        setLoadingModal(false);
+      } else {
+        setModalMovieData(null);
+      }
+    };
+    fetchModalData();
+  }, [selectedMovieId]);
+
+  const handleAddToHistoryFromModal = (movie) => {
+    setSelectedMovieId(null);
+    setMovieToReview(movie); // This opens the review modal
+  };
 
   const handleUpdateSettings = (settings) => {
     updatePartyStatus(settings);
@@ -860,6 +887,17 @@ const ConductorDashboard = () => {
 
   return (
     <>
+      {/* --- ADD: Render the new modal --- */}
+      <MovieDetailsModal
+        movie={modalMovieData}
+        isLoading={loadingModal}
+        onClose={() => setSelectedMovieId(null)}
+        onAddToHistory={handleAddToHistoryFromModal}
+        onAddToFavorites={(movie) =>
+          alert(`Favorites for ${movie.title} coming soon!`)
+        }
+      />
+
       {movieToReview && (
         <ReviewMovieModal
           movie={movieToReview}
@@ -1048,8 +1086,8 @@ const ConductorDashboard = () => {
           </div>
 
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="md:col-span-1 flex flex-col space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 flex flex-col space-y-6">
                 <StreamLinkCard
                   initialUrl={party.stream_url}
                   onUpdate={handleUpdateStreamUrl}
@@ -1071,8 +1109,9 @@ const ConductorDashboard = () => {
 
                 <ViewersList viewers={viewers} />
               </div>
-              <div className="md:col-span-2 space-y-8">
+              <div className="lg:col-span-2 space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Ensures Controls is first on mobile */}
                   <VerticalDashboardControls
                     onPlay={handlePlay}
                     onPause={handlePause}
@@ -1084,12 +1123,15 @@ const ConductorDashboard = () => {
                     playState={party.party_state?.status}
                     isVotingOpen={party.voting_open}
                   />
+
+                  {/* Ensures Settings is second on mobile */}
                   <PartySettings
                     party={party}
                     onUpdate={handleUpdateSettings}
                   />
                 </div>
 
+                {/* Ensures these are last on mobile */}
                 <MoviePoll
                   movies={party.poll_movies}
                   voteCounts={pollVoteCounts}
@@ -1101,6 +1143,7 @@ const ConductorDashboard = () => {
                   isVotingOpen={party.voting_open}
                   isAddingToPoll={isAddingToPoll}
                   setIsAddingToPoll={setIsAddingToPoll}
+                  onSelectMovie={setSelectedMovieId}
                   SearchComponent={(props) => (
                     <MovieSearchInput
                       {...props}
@@ -1113,6 +1156,7 @@ const ConductorDashboard = () => {
                 />
                 <ViewerSuggestions
                   suggestions={suggestions}
+                  onSelectMovie={setSelectedMovieId}
                   onMoveToPoll={handleMoveSuggestionToPoll}
                 />
               </div>

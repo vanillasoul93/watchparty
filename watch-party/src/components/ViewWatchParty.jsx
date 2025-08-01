@@ -10,7 +10,12 @@ import {
   Search,
   PlusCircle,
 } from "lucide-react";
-import { getMovieDetails, searchTMDb } from "../api/tmdb";
+import {
+  getMovieDetails,
+  searchTMDb,
+  getMovieDetailsWithCredits,
+} from "../api/tmdb";
+import MovieDetailsModal from "./MovieDetailsModal";
 import ReviewMovieModal from "./ReviewMovieModal";
 import WatchList from "./WatchList";
 import ShareableLink from "./ShareableLink";
@@ -108,6 +113,29 @@ const ViewWatchParty = () => {
 
   const [pollListRef] = useAutoAnimate({ duration: 500 });
   const [suggestionsListRef] = useAutoAnimate({ duration: 500 });
+
+  const [selectedMovieId, setSelectedMovieId] = useState(null);
+  const [modalMovieData, setModalMovieData] = useState(null);
+  const [loadingModal, setLoadingModal] = useState(false);
+
+  useEffect(() => {
+    const fetchModalData = async () => {
+      if (selectedMovieId) {
+        setLoadingModal(true);
+        const fullDetails = await getMovieDetailsWithCredits(selectedMovieId);
+        setModalMovieData(fullDetails);
+        setLoadingModal(false);
+      } else {
+        setModalMovieData(null);
+      }
+    };
+    fetchModalData();
+  }, [selectedMovieId]);
+
+  const handleAddToHistoryFromModal = (movie) => {
+    setSelectedMovieId(null);
+    setMovieToReview(movie);
+  };
 
   // Fetch the user's profile to check their review prompt setting
   useEffect(() => {
@@ -482,6 +510,16 @@ const ViewWatchParty = () => {
 
   return (
     <>
+      {/* --- ADD: Render the new modal --- */}
+      <MovieDetailsModal
+        movie={modalMovieData}
+        isLoading={loadingModal}
+        onClose={() => setSelectedMovieId(null)}
+        onAddToHistory={handleAddToHistoryFromModal}
+        onAddToFavorites={(movie) =>
+          alert(`Favorites for ${movie.title} coming soon!`)
+        }
+      />
       {movieToReview && (
         <ReviewMovieModal
           movie={movieToReview}
@@ -555,19 +593,22 @@ const ViewWatchParty = () => {
                   </div>
                   {party.voting_open ? (
                     <ul
-                      className="space-y-2 max-h-100 overflow-y-auto pr-2"
+                      className="space-y-2 max-h-100 overflow-y-auto p-1"
                       ref={pollListRef}
                     >
                       {sortedPollMovies.map((movie) => (
                         <li
                           key={movie.id}
-                          className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
+                          className="bg-gray-800 p-3 rounded-md flex items-center justify-between  transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
                         >
-                          <div className="flex items-center gap-4">
+                          <div
+                            onClick={() => setSelectedMovieId(movie.id)}
+                            className="flex items-center gap-4 cursor-pointer"
+                          >
                             <img
                               src={movie.imageUrl}
                               alt={movie.title}
-                              className="w-10 h-16 object-cover rounded"
+                              className="w-14 h-[88px] object-cover rounded"
                             />
                             <span className="text-gray-300">
                               {movie.title} ({movie.year})
@@ -632,17 +673,22 @@ const ViewWatchParty = () => {
                           <li
                             key={suggestion.id}
                             // Conditionally add the border class
-                            className={`bg-gray-800 p-3 rounded-md flex items-center justify-between border-2 border-dashed ${
+                            className={`bg-gray-800 p-3 rounded-md flex items-center justify-between border-2 border-dashed hover:border-solid ${
                               isMySuggestion
                                 ? "border-indigo-600"
                                 : "border-transparent"
                             }`}
                           >
-                            <div className="flex items-center gap-4">
+                            <div
+                              onClick={() =>
+                                setSelectedMovieId(suggestion.movie_tmdb_id)
+                              }
+                              className="flex items-center gap-4 cursor-pointer"
+                            >
                               <img
                                 src={suggestion.movie_image_url}
                                 alt={suggestion.movie_title}
-                                className="w-14 h-20 object-cover rounded"
+                                className="w-14 h-[88px] object-cover rounded"
                               />
                               <div className="flex flex-col">
                                 <span className="text-gray-300 text-xl pb-0.5">

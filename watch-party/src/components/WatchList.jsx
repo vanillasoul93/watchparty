@@ -106,18 +106,23 @@ const WatchList = ({
         {/* --- Part 1: The Static Top Section --- */}
         <ul className="space-y-3 mb-3">
           {upNext && (
-            <li className="flex items-center gap-3 border-2 border-dashed border-blue-500 p-2 rounded-lg ">
+            <li
+              onClick={() => setSelectedMovieId(upNext.id)}
+              className="bg-gray-900 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 flex items-center gap-3 border-2 border-dashed border-blue-500 p-2 rounded-lg cursor-pointer "
+            >
               <img
                 src={upNext.imageUrl}
                 alt={upNext.title}
-                onClick={() => setSelectedMovieId(upNext.id)}
-                className="w-17 h-26 object-cover rounded cursor-pointer"
+                className="w-17 h-26 object-cover rounded "
               />
               <div>
                 <p className="font-semibold text-white">
                   {upNext.title} ({upNext.year})
                 </p>
-                <p className="text-sm text-blue-400">Up Next</p>
+                <p className="text-xs text-gray-400 mb-1">
+                  {upNext.runtime} min
+                </p>
+                <p className="text-sm font-bold text-blue-400">Up Next</p>
               </div>
             </li>
           )}
@@ -138,14 +143,16 @@ const WatchList = ({
               <li>
                 <div
                   onClick={() => setSelectedMovie(nowPlaying)}
-                  className="flex items-center justify-between gap-3 border-2 border-green-500 p-2 rounded-lg"
+                  className="bg-gray-900 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 flex items-center justify-between gap-3 border-2 border-green-500 p-2 rounded-lg"
                 >
-                  <div className="flex items-center gap-3">
+                  <div
+                    onClick={() => setSelectedMovieId(nowPlaying.id)}
+                    className="flex items-center gap-3 "
+                  >
                     <img
                       src={nowPlaying.imageUrl}
                       alt={nowPlaying.title}
-                      onClick={() => setSelectedMovieId(nowPlaying.id)}
-                      className="w-17 h-26 object-cover rounded cursor-pointer"
+                      className="w-17 h-26 object-cover rounded"
                     />
                     <div>
                       <p className="font-bold text-white">
@@ -206,20 +213,22 @@ const WatchList = ({
         )}
 
         {/* --- Part 2: The Scrollable History Section --- */}
-        <ul className="space-y-3 overflow-y-auto pr-2 flex-grow">
+        <ul className="space-y-3 overflow-y-auto p-1 flex-grow">
           {reversedWatchedMovies.map((movie, index) => {
             const originalIndex = watchedMovies.length - 1 - index;
             return (
               <li
                 key={`${movie.id}-${originalIndex}`}
-                className="flex items-center justify-between gap-3 opacity-60 "
+                className="bg-gray-900 p-3 mr-4 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 "
               >
-                <div className="flex items-center gap-3">
+                <div
+                  onClick={() => setSelectedMovieId(movie.id)}
+                  className="flex items-center gap-3 cursor-pointer "
+                >
                   <img
                     src={movie.imageUrl}
                     alt={movie.title}
-                    onClick={() => setSelectedMovieId(movie.id)}
-                    className="w-12 h-[72px] object-cover rounded cursor-pointer"
+                    className="w-14 h-[88px] object-cover rounded"
                   />
                   <div>
                     <p className="text-sm text-gray-300">

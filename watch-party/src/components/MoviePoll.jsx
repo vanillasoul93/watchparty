@@ -14,6 +14,7 @@ const MoviePoll = ({
   isAddingToPoll,
   setIsAddingToPoll,
   SearchComponent,
+  onSelectMovie,
 }) => {
   const [parent] = useAutoAnimate({ duration: 500 });
 
@@ -83,17 +84,20 @@ const MoviePoll = ({
           The movie poll is empty.
         </p>
       ) : (
-        <ul className="space-y-2 max-h-100 overflow-y-auto pr-2" ref={parent}>
+        <ul className="space-y-2 max-h-100 overflow-y-auto p-1" ref={parent}>
           {sortedMovies.map((movie) => (
             <li
               key={movie.id}
-              className="bg-gray-800 p-3 rounded-md flex items-center justify-between"
+              className="bg-gray-800 p-3 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
             >
-              <div className="flex items-center gap-4">
+              <div
+                onClick={() => onSelectMovie(movie.id)}
+                className="flex items-center gap-4 cursor-pointer"
+              >
                 <img
                   src={movie.imageUrl}
                   alt={movie.title}
-                  className="w-10 h-16 object-cover rounded"
+                  className="w-14 h-[88px] object-cover rounded"
                 />
                 <span className="text-gray-300">
                   {movie.title} ({movie.year})
