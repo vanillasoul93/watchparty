@@ -24,8 +24,81 @@ import {
   Settings,
   ChevronUp,
   ChevronDown,
+  Copy,
+  Check,
+  KeyRound,
 } from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
+
+// --- NEW: A dedicated component for invite links ---
+const PartyInviteCard = ({ party }) => {
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const partyUrl = `${window.location.origin}/party/${party.id}`;
+
+  const handleCopy = (textToCopy, setCopied) => {
+    navigator.clipboard.writeText(textToCopy).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      (err) => {
+        console.error("Failed to copy: ", err);
+      }
+    );
+  };
+
+  return (
+    <div className="bg-gray-900 p-6 rounded-lg space-y-4">
+      {/* Shareable Link */}
+      <div>
+        <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+          <LinkIcon size={20} /> Invite Link
+        </h3>
+        <div className="flex items-center gap-2">
+          <p className="text-indigo-400 font-mono text-sm truncate flex-grow bg-gray-800 p-2 rounded-md">
+            {partyUrl}
+          </p>
+          <button
+            onClick={() => handleCopy(partyUrl, setLinkCopied)}
+            className={`p-2 rounded-lg transition-colors ${
+              linkCopied
+                ? "bg-green-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-indigo-600"
+            }`}
+          >
+            {linkCopied ? <Check size={20} /> : <Copy size={20} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Invite Code (only for private parties) */}
+      {!party.is_public && party.invite_code && (
+        <div>
+          <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+            <KeyRound size={20} /> Invite Code
+          </h3>
+          <div className="flex items-center gap-2">
+            <p className="text-amber-400 font-mono text-lg tracking-widest flex-grow bg-gray-800 p-2 rounded-md text-center">
+              {party.invite_code}
+            </p>
+            <button
+              onClick={() => handleCopy(party.invite_code, setCodeCopied)}
+              className={`p-2 rounded-lg transition-colors ${
+                codeCopied
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-700 text-gray-300 hover:bg-indigo-600"
+              }`}
+            >
+              {codeCopied ? <Check size={20} /> : <Copy size={20} />}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -1088,11 +1161,6 @@ const ConductorDashboard = () => {
           <div className="bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 flex flex-col space-y-6">
-                <StreamLinkCard
-                  initialUrl={party.stream_url}
-                  onUpdate={handleUpdateStreamUrl}
-                />
-
                 <WatchList
                   party={party}
                   watchedMovies={watchedMovieDetails}
@@ -1106,6 +1174,11 @@ const ConductorDashboard = () => {
                   isConductor={true}
                   onShowReviewModal={setMovieToReview}
                 />
+                <StreamLinkCard
+                  initialUrl={party.stream_url}
+                  onUpdate={handleUpdateStreamUrl}
+                />
+                <PartyInviteCard party={party} />
 
                 <ViewersList viewers={viewers} />
               </div>

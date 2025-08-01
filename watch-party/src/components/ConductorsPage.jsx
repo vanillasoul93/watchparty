@@ -642,7 +642,25 @@ const ConductorsPage = () => {
   }, [user, fetchParties]);
 
   const handleJoinPrivateParty = async () => {
-    /* ... remains the same ... */
+    if (!inviteCodeInput.trim()) {
+      setJoinError("Please enter an invite code.");
+      return;
+    }
+    setJoinError("");
+
+    const { data, error } = await supabase
+      .from("watch_parties")
+      .select("id")
+      .eq("invite_code", inviteCodeInput.trim().toUpperCase())
+      .single();
+
+    if (error || !data) {
+      setJoinError("Invalid invite code. Please try again.");
+    } else {
+      setShowJoinModal(false);
+      setInviteCodeInput("");
+      navigate(`/party/${data.id}`);
+    }
   };
 
   // Helper to choose the right card component based on viewMode
@@ -709,7 +727,42 @@ const ConductorsPage = () => {
 
   return (
     <>
-      {showJoinModal && <div /* ... Modal JSX ... */ />}
+      {showJoinModal && (
+        <div className="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-70 p-4 h-screen">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">
+              Join Private Party
+            </h2>
+            <p className="text-gray-400 mb-6">
+              Enter the invite code below to join the party.
+            </p>
+            <input
+              type="text"
+              value={inviteCodeInput}
+              onChange={(e) => setInviteCodeInput(e.target.value)}
+              className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 text-center font-mono text-lg tracking-widest"
+              placeholder="A1B2C3"
+            />
+            {joinError && (
+              <p className="text-red-400 text-sm mt-2">{joinError}</p>
+            )}
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => setShowJoinModal(false)}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleJoinPrivateParty}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-8">
@@ -857,7 +910,7 @@ const ConductorsPage = () => {
                     className={
                       viewMode === "list"
                         ? "space-y-3"
-                        : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-8"
+                        : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
                     }
                   >
                     {concludedParties.map((party) =>
