@@ -122,7 +122,7 @@ const PublicMovieHistoryList = ({ groupedHistory, onSelectMovie }) => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search movie history..."
-          className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10"
+          className="w-full bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:outline-none focus:border-indigo-700"
         />
         <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -538,7 +538,7 @@ const PublicProfilePage = () => {
 
           {/* Stats Section */}
           {profile.is_stats_public && (
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8 grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg shadow-black/20 mb-8 grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-white">
                   {profile.movies_conducted_count || 0}

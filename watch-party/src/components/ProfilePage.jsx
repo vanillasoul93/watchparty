@@ -154,7 +154,7 @@ const AddFavoriteMovie = ({ onAdd, existingFavorites = [] }) => {
         type="text"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
+        className="w-full bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:border-indigo-700 transition focus:outline-none"
         placeholder="Search to add a favorite..."
       />
       {loading && (
@@ -195,11 +195,15 @@ const MovieHistoryList = ({ groupedHistory, onSelectMovie, onDelete }) => {
   return (
     <div className="space-y-4">
       <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="text-gray-400" size={20} />
+        </div>
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          // ... (rest of the input props)
+          className="w-full bg-slate-800 border-2 border-slate-600 text-white rounded-lg p-3 pl-10 focus:border-indigo-700 transition focus:outline-none"
+          placeholder="Search movie history..."
         />
       </div>
       <div className="space-y-4 max-h-160 overflow-y-auto p-1 pb-3 pr-2">
@@ -298,7 +302,7 @@ const MovieReviewHistoryModal = ({
   if (!movieDetails || !reviews) return null; // Don't render if data isn't ready
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[55] p-4 h-screen">
+    <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-[55] p-4 h-screen">
       <div
         className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative bg-cover bg-center shadow-2xl shadow-black/60"
         style={{
@@ -1004,7 +1008,7 @@ const ProfilePage = () => {
                     id="aboutMe"
                     value={aboutMe}
                     onChange={(e) => setAboutMe(e.target.value)}
-                    className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 h-24"
+                    className="w-full bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-3 h-24 focus:outline-none focus:border-indigo-700 transition"
                     placeholder="Tell us something about yourself..."
                   />
                 </div>

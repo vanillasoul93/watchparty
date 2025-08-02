@@ -16,14 +16,14 @@ import {
 export default function HowItWorks() {
   return (
     <div>
-      <section className="py-20 bg-gray-800">
+      <section className="py-20 bg-gray-900">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-4xl font-bold text-white mb-2">How It Works</h2>
           <p className="text-gray-400 mb-12">
             Get started in just three simple steps.
           </p>
           <div className="grid md:grid-cols-3 gap-10">
-            <div className="bg-gray-900 p-8 rounded-xl shadow-lg transform hover:-translate-y-2 transition-transform duration-300">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-8 rounded-xl shadow-lg shadow-black/40 transform hover:-translate-y-2 transition-transform duration-300">
               <div className="bg-indigo-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
                 <User size={32} />
               </div>
@@ -35,7 +35,7 @@ export default function HowItWorks() {
                 your friends, or meet new people and join a room.
               </p>
             </div>
-            <div className="bg-gray-900 p-8 rounded-xl shadow-lg transform hover:-translate-y-2 transition-transform duration-300">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-8 rounded-xl shadow-lg shadow-black/40 transform hover:-translate-y-2 transition-transform duration-300">
               <div className="bg-indigo-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
                 <Vote size={32} />
               </div>
@@ -45,7 +45,7 @@ export default function HowItWorks() {
                 what plays next!
               </p>
             </div>
-            <div className="bg-gray-900 p-8 rounded-xl shadow-lg transform hover:-translate-y-2 transition-transform duration-300">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-8 rounded-xl shadow-lg shadow-black/40 transform hover:-translate-y-2 transition-transform duration-300">
               <div className="bg-indigo-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
                 <CircleQuestionMark size={32} />
               </div>
