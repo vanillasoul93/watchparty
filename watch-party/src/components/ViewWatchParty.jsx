@@ -250,7 +250,10 @@ const ViewWatchParty = () => {
   }, [partyId, user]);
 
   useEffect(() => {
-    if (!partyId || !user) return;
+    if (!partyId || !user) {
+      setLoading(false); // Stop loading if we don't have what we need
+      return;
+    }
 
     const fetchInitialData = async () => {
       setLoading(true);
@@ -259,15 +262,39 @@ const ViewWatchParty = () => {
         .select("*")
         .eq("id", partyId)
         .single();
-      if (error) {
-        setError("Failed to load party details.");
+      if (error || !data) {
+        setError("This party could not be found.");
         setLoading(false);
-      } else {
-        setParty(data);
-        await Promise.all([refreshVoteData(), refreshSuggestionData()]);
-        setLoading(false);
+        return;
       }
+
+      // --- THIS IS THE SECURITY FIX ---
+      // After fetching the party, check if the current user is the conductor.
+      if (data.conductor_id === user.id) {
+        // If they are, redirect them to the dashboard immediately.
+        navigate(`/dashboard/${partyId}`, { replace: true });
+        return; // Stop further execution for this component
+      }
+      setParty(data);
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("prompt_for_reviews, suggest_anonymously, all_favorite_movies")
+        .eq("id", user.id)
+        .single();
+
+      if (profileData) {
+        setUserProfile(profileData);
+        setAllFavoriteMovies(
+          Array.isArray(profileData.all_favorite_movies)
+            ? profileData.all_favorite_movies
+            : []
+        );
+      }
+
+      await Promise.all([refreshVoteData(), refreshSuggestionData()]);
+      setLoading(false);
     };
+
     fetchInitialData();
 
     const partyChannel = supabase.channel(`party:${partyId}`, {
@@ -359,7 +386,7 @@ const ViewWatchParty = () => {
     return () => {
       supabase.removeChannel(partyChannel);
     };
-  }, [partyId, user, refreshVoteData, refreshSuggestionData]);
+  }, [partyId, user, refreshVoteData, refreshSuggestionData, navigate]);
 
   useEffect(() => {
     const currentVotingOpen = party?.voting_open;
@@ -550,21 +577,20 @@ const ViewWatchParty = () => {
     }
   };
 
-  if (loading)
-    return <div className="text-center text-white pt-40">Joining Party...</div>;
-  if (!party)
-    return (
-      <div className="text-center text-red-500 pt-40">
-        Could not find this party.
-      </div>
-    );
-
   const sortedPollMovies = [...(party?.poll_movies || [])].sort(
     (a, b) => (pollVoteCounts[b.id] || 0) - (pollVoteCounts[a.id] || 0)
   );
   const remainingVotes = (party?.votes_per_user || 3) - userVotes.length;
   const remainingSuggestions =
     (party?.suggestions_per_user || 2) - userSuggestionCount;
+
+  if (loading)
+    return <div className="text-center text-white pt-40">Joining Party...</div>;
+  if (error)
+    return <div className="text-center text-red-500 pt-40">{error}</div>;
+  // If the user is the conductor, this component will have redirected,
+  // so we can be sure `party` is valid here for viewers.
+  if (!party) return null;
 
   return (
     <>

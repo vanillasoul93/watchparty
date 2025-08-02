@@ -348,6 +348,7 @@ const ConductorDashboard = () => {
   const [loadingModal, setLoadingModal] = useState(false);
 
   const [allFavoriteMovies, setAllFavoriteMovies] = useState([]);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   const [notification, setNotification] = useState({
     show: false,
@@ -433,31 +434,33 @@ const ConductorDashboard = () => {
       }
     };
 
-    // This function fetches all data needed for the initial load.
+    // Fetch initial data (but don't do the security check yet)
     const fetchInitialData = async () => {
-      setLoading(true);
       const [partyRes, profileRes] = await Promise.all([
         supabase.from("watch_parties").select("*").eq("id", partyId).single(),
-        // --- THIS IS THE FIX: Select all profile columns needed ---
         supabase
           .from("profiles")
           .select("prompt_for_reviews, all_favorite_movies")
           .eq("id", user.id)
           .single(),
       ]);
-      if (partyRes.error) setError("Failed to load party details.");
-      else setParty(partyRes.data);
+
+      if (partyRes.error) {
+        setError("Failed to load party details.");
+      } else {
+        setParty(partyRes.data);
+      }
+
       if (profileRes.data) {
         setUserProfile(profileRes.data);
-        // Set the favorites state
         setAllFavoriteMovies(
           Array.isArray(profileRes.data.all_favorite_movies)
             ? profileRes.data.all_favorite_movies
             : []
         );
       }
+
       await Promise.all([refreshVoteCounts(), refreshSuggestionData()]);
-      setLoading(false);
     };
 
     fetchInitialData();
@@ -527,10 +530,28 @@ const ConductorDashboard = () => {
     };
   }, [partyId, user]); // This effect re-runs ONLY if the party or user changes.
 
+  // --- NEW: A separate useEffect dedicated to the security check ---
+  useEffect(() => {
+    // Only run this check if we have both the user and the party data.
+    if (user && party) {
+      if (party.conductor_id === user.id) {
+        setIsAuthorized(true);
+        setLoading(false); // We are authorized and ready to show the page
+      } else {
+        setError("Access Denied: You are not the conductor of this party.");
+        setLoading(false);
+        setTimeout(() => navigate("/conductors"), 3000);
+      }
+    }
+  }, [party, user, navigate]); // This runs whenever party or user data changes
+
   // This effect manages adding/removing the conductor from the persistent viewers table,
   // which in turn triggers the database functions to update the count.
   useEffect(() => {
-    if (!partyId || !user) return;
+    if (!partyId || !user) {
+      setLoading(false); // Stop loading if we don't have what we need
+      return;
+    }
 
     const joinParty = async () => {
       await supabase.from("party_viewers").upsert(
@@ -1012,10 +1033,13 @@ const ConductorDashboard = () => {
 
   if (loading)
     return (
-      <div className="text-center text-white pt-40">Loading Dashboard...</div>
+      <div className="text-center text-white pt-40">Verifying access...</div>
     );
-  if (!party)
-    return <div className="text-center text-white pt-40">Party not found.</div>;
+  if (error)
+    return <div className="text-center text-red-500 pt-40">{error}</div>;
+
+  // Do not render the dashboard until authorization is confirmed
+  if (!isAuthorized) return null;
 
   return (
     <>
