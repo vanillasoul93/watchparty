@@ -76,7 +76,7 @@ const FavoriteMovieCard = ({
       onDragEnter={onDragEnter}
       onDragEnd={onDragEnd}
       onDragOver={(e) => e.preventDefault()}
-      className={`relative group bg-gray-700 rounded-lg cursor-grab transition-opacity w-32 flex-shrink-0 ${
+      className={`relative group bg-gray-900 rounded-lg cursor-grab transition-opacity w-32 flex-shrink-0 ${
         isDragging ? "opacity-30" : "opacity-100"
       }`}
     >
@@ -202,7 +202,7 @@ const MovieHistoryList = ({ groupedHistory, onSelectMovie, onDelete }) => {
           // ... (rest of the input props)
         />
       </div>
-      <div className="space-y-4 max-h-160 overflow-y-auto pr-2">
+      <div className="space-y-4 max-h-160 overflow-y-auto p-1 pb-3 pr-2">
         {filteredMovies.length > 0 ? (
           filteredMovies.map((reviews) => {
             const latestReview = reviews[0];
@@ -210,7 +210,7 @@ const MovieHistoryList = ({ groupedHistory, onSelectMovie, onDelete }) => {
               <div
                 key={latestReview.movie_tmdb_id}
                 onClick={() => onSelectMovie(reviews)}
-                className="bg-gray-700 p-4 rounded-lg flex gap-4 cursor-pointer hover:bg-gray-600 transition-colors"
+                className="bg-gradient-to-br from-slate-800 to-slate-900/20 shadow-lg shadow-black/20 p-4 rounded-lg flex gap-4 cursor-pointer hover:bg-slate-700 transition-colors"
               >
                 <img
                   src={latestReview.movie_image_url}
@@ -839,7 +839,7 @@ const ProfilePage = () => {
 
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1 space-y-8">
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col items-center text-center">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg flex flex-col items-center text-center">
                 <div className="relative mb-4">
                   <img
                     src={
@@ -870,7 +870,7 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg space-y-4">
                 <div className="flex items-center gap-4">
                   <User className="text-indigo-400" size={24} />
                   <p className="text-lg text-white truncate">{username}</p>
@@ -881,7 +881,7 @@ const ProfilePage = () => {
                 </div>
               </div>
               {/* --- 4. NEW: Privacy Settings Card --- */}
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-bold text-white mb-2">
                   Privacy Settings
                 </h3>
@@ -943,7 +943,7 @@ const ProfilePage = () => {
                   />
                 </div>
               </div>
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg space-y-6">
                 {/* --- NEW Suggest Anonymously Toggle --- */}
                 <div className="flex items-center justify-between">
                   <label className="text-white font-medium">
@@ -1009,7 +1009,7 @@ const ProfilePage = () => {
                   />
                 </div>
               </div>
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg space-y-4">
                 <h3 className="text-xl font-bold text-white">
                   Change Password
                 </h3>
@@ -1062,7 +1062,7 @@ const ProfilePage = () => {
             </div>
 
             <div className="lg:col-span-2 space-y-8">
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-6 rounded-xl shadow-lg space-y-4">
                 <h3 className="text-xl font-bold text-white">Your Stats</h3>
                 <div className="flex items-center gap-4">
                   <Clapperboard className="text-indigo-400" size={24} />
@@ -1084,7 +1084,7 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              <div className="bg-gray-800 rounded-xl shadow-lg">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 rounded-xl shadow-lg">
                 {/* Tab Navigation */}
                 <div className="px-6 border-b border-gray-700">
                   <nav className="-mb-px flex space-x-8" aria-label="Tabs">
@@ -1125,7 +1125,7 @@ const ProfilePage = () => {
                 <div className="p-6">
                   {activeTab === "favorites" && (
                     <>
-                      <div className="bg-gray-800 p-6 rounded-xl">
+                      <div className="bg-gray-950/20 p-6 rounded-xl mb-6">
                         <label className="block text-xl font-bold text-white mb-2">
                           Top 5 Favorite Movies
                         </label>
@@ -1153,7 +1153,7 @@ const ProfilePage = () => {
                         </div>
                       </div>
                       {/* --- NEW: All Favorites Section --- */}
-                      <div className="bg-gray-800 p-6 rounded-xl">
+                      <div className="bg-gray-950/20 p-6 rounded-xl">
                         <label className="block text-xl font-bold text-white mb-2">
                           All Favorites Collection
                         </label>
@@ -1169,7 +1169,7 @@ const ProfilePage = () => {
                           {allFavoriteMovies.map((movie) => (
                             <div
                               key={movie.id}
-                              className="bg-gray-700 p-3 rounded-lg flex items-center justify-between gap-4"
+                              className="bg-gradient-to-br from-slate-800 to-slate-900/20 shadow-lg shadow-black/10 p-3 rounded-lg flex items-center justify-between gap-4"
                             >
                               <div className="flex items-center gap-4">
                                 <img

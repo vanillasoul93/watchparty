@@ -238,8 +238,8 @@ const CreateWatchParty = () => {
   };
 
   return (
-    <div className="bg-gray-800 min-h-screen pt-24 pb-12 flex items-center justify-center">
-      <div className="bg-gray-900 p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 relative">
+    <div className="bg-gray-900 min-h-screen pt-24 pb-12 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-8 md:p-12 rounded-2xl shadow-xl shadow-black/20 w-full max-w-2xl mx-4 relative">
         <h1 className="text-4xl font-bold text-white text-center mb-2">
           Create Your Watch Party
         </h1>

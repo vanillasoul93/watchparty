@@ -133,7 +133,7 @@ const PartyCard = ({
         "https://placehold.co/400x225/1a202c/ffffff?text=No+Image";
 
   return (
-    <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 hover:border-indigo-500 transition-all duration-300 flex flex-col h-full">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 rounded-xl shadow-lg shadow-black/40 border border-transparent hover:border-indigo-500 transition-all duration-300 flex flex-col h-full ">
       <div className="relative w-full h-48 flex-shrink-0">
         <img
           key={currentImage}
@@ -364,7 +364,7 @@ const CompactPartyCard = ({
   const isIntermission = party.party_state?.status === "intermission";
 
   return (
-    <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 hover:border-indigo-500 transition-all duration-300 flex flex-col p-4 justify-between">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 rounded-xl shadow-lg border border-slate-800 hover:border-indigo-500 transition-all duration-300 flex flex-col p-4 justify-between">
       <div>
         <div className="flex justify-between items-start mb-3">
           <h3 className="text-lg font-bold text-white truncate">
@@ -504,7 +504,7 @@ const ListPartyCard = ({
     new Date() - new Date(party.end_time) < 3600000;
 
   return (
-    <div className="bg-gray-800 rounded-lg p-3 flex items-center justify-between gap-4">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 shadow-lg shadow-black/20 rounded-lg p-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-4 truncate">
         <img
           src={
@@ -857,11 +857,11 @@ const ConductorsPage = () => {
                 {myActiveParties.length > 0 ? (
                   // --- This container now handles all three view modes vertically ---
                   <div
-                    className={`max-h-screen overflow-y-auto pr-2 ${
+                    className={
                       viewMode === "list"
                         ? "space-y-3"
                         : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
-                    }`}
+                    }
                   >
                     {myActiveParties.map((party) =>
                       renderPartyCard(party, false)

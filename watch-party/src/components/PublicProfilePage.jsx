@@ -129,7 +129,7 @@ const PublicMovieHistoryList = ({ groupedHistory, onSelectMovie }) => {
           size={20}
         />
       </div>
-      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+      <div className="space-y-4 max-h-96 overflow-y-auto p-1">
         {filteredMovies.length > 0 ? (
           filteredMovies.map((reviews) => {
             const latestReview = reviews[0];
@@ -137,7 +137,7 @@ const PublicMovieHistoryList = ({ groupedHistory, onSelectMovie }) => {
               <div
                 key={latestReview.movie_tmdb_id}
                 onClick={() => onSelectMovie(reviews)}
-                className="bg-gray-800 p-4 rounded-lg flex gap-4 cursor-pointer hover:bg-gray-700 transition-colors"
+                className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-4 rounded-lg flex gap-4 cursor-pointer shadow-lg shadow-black/20 transition-all"
               >
                 <img
                   src={latestReview.movie_image_url}
@@ -634,12 +634,12 @@ const PublicProfilePage = () => {
                     <h3 className="text-xl font-bold text-white mb-4">
                       Favorites Collection
                     </h3>
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-96 overflow-y-auto p-1 pr-3">
                       {otherFavorites.map((movie) => (
                         <div
                           key={movie.id}
                           onClick={() => setSelectedMovieId(movie.id)}
-                          className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 cursor-pointer hover:bg-gray-700 transition-colors"
+                          className="bg-gradient-to-br from-slate-800 to-slate-900/20 p-3 rounded-lg flex items-center gap-4 cursor-pointer hover:bg-slate-700 transition-colors shadow-lg shadow-black/20"
                         >
                           <img
                             src={movie.imageUrl}
