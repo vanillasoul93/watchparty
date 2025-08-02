@@ -116,6 +116,7 @@ const FavoriteMovieCard = ({
   );
 };
 
+/// --- CORRECTED AddFavoriteMovie component ---
 const AddFavoriteMovie = ({ onAdd, existingFavorites = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
@@ -374,7 +375,7 @@ const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState("favorites");
 
   // Profile data state
-  const [aboutMe, setAboutMe] = useState("");
+  const [aboutMe, setAboutMe] = useState(null);
   const debouncedAboutMe = useDebounce(aboutMe, 1000);
 
   const [favoriteMovies, setFavoriteMovies] = useState([]);
@@ -426,6 +427,11 @@ const ProfilePage = () => {
 
   const [modalMovieDetails, setModalMovieDetails] = useState(null); // This will hold the detailed movie info
   const [loadingModal, setLoadingModal] = useState(false);
+
+  const [allFavoriteMovies, setAllFavoriteMovies] = useState([]); // This is the full collection
+
+  // A ref to track the initial load, to prevent debounced saves on mount
+  const isInitialMount = useRef(true);
 
   // --- NEW: This effect fetches the details when a movie is selected ---
   useEffect(() => {
@@ -528,10 +534,15 @@ const ProfilePage = () => {
     }
   };
 
-  // --- 2. NEW: useEffect to automatically save debounced text ---
+  // useEffect to automatically save debounced text for 'About Me'
   useEffect(() => {
-    // This check prevents saving the initial empty state on first load
-    if (debouncedAboutMe !== null && aboutMe !== null) {
+    // Check the ref to prevent saving on the very first render
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    // Only save if the user has actually typed something
+    if (aboutMe !== null) {
       updateProfileSetting({ about_me: debouncedAboutMe });
     }
   }, [debouncedAboutMe]);
@@ -551,6 +562,18 @@ const ProfilePage = () => {
     }
   };
 
+  // useEffect to automatically save debounced text
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (aboutMe !== null) {
+      updateProfileSetting({ about_me: debouncedAboutMe });
+    }
+  }, [debouncedAboutMe]);
+
+  // --- THIS IS THE CORRECTED DATA-FETCHING HOOK ---
   useEffect(() => {
     const getProfileAndHistory = async () => {
       try {
@@ -578,9 +601,17 @@ const ProfilePage = () => {
           const data = profileRes.data;
           setAboutMe(data.about_me || "");
           setAvatarUrl(data.avatar_url);
+          setPromptForReviews(data.prompt_for_reviews);
+          setSuggestAnonymously(data.suggest_anonymously);
           setFavoriteMovies(
             Array.isArray(data.favorite_movies) ? data.favorite_movies : []
           );
+          setAllFavoriteMovies(
+            Array.isArray(data.all_favorite_movies)
+              ? data.all_favorite_movies
+              : []
+          );
+
           setProfileStats({
             movies_watched_count: data.movies_watched_count || 0,
             movies_conducted_count: data.movies_conducted_count || 0,
@@ -591,8 +622,6 @@ const ProfilePage = () => {
           setIsFavoritesPublic(data.is_favorites_public);
           setIsMovieHistoryPublic(data.is_movie_history_public);
           setIsPartyHistoryPublic(data.is_party_history_public);
-          setPromptForReviews(data.prompt_for_reviews);
-          setSuggestAnonymously(data.suggest_anonymously);
         }
 
         if (movieHistoryRes.error) throw movieHistoryRes.error;
@@ -608,7 +637,7 @@ const ProfilePage = () => {
       }
     };
     getProfileAndHistory();
-  }, [user]);
+  }, [user?.id]); // We depend on the user object to run this on login
 
   const handleToggle = (setter, key, currentValue) => {
     const newValue = !currentValue;
@@ -617,13 +646,37 @@ const ProfilePage = () => {
   };
 
   const handleAddFavorite = (movie) => {
-    if (favoriteMovies.length < 5) {
-      const newFavs = [...favoriteMovies, movie];
-      setFavoriteMovies(newFavs);
-      updateProfileSetting({ favorite_movies: newFavs });
+    if (allFavoriteMovies.some((fav) => fav.id === movie.id)) return;
+    const newAllFavs = [...allFavoriteMovies, movie];
+    setAllFavoriteMovies(newAllFavs);
+    updateProfileSetting({ all_favorite_movies: newAllFavs });
+  };
+  const handleRemoveFromAllFavorites = (movieId) => {
+    const newAllFavs = allFavoriteMovies.filter((m) => m.id !== movieId);
+    const newTop5 = favoriteMovies.filter((m) => m.id !== movieId);
+    setAllFavoriteMovies(newAllFavs);
+    setFavoriteMovies(newTop5);
+    updateProfileSetting({
+      all_favorite_movies: newAllFavs,
+      favorite_movies: newTop5,
+    });
+  };
+  const handleAddFavoriteToTop5 = (movie) => {
+    if (
+      favoriteMovies.length < 5 &&
+      !favoriteMovies.some((fav) => fav.id === movie.id)
+    ) {
+      const newTop5 = [...favoriteMovies, movie];
+      setFavoriteMovies(newTop5);
+      updateProfileSetting({ favorite_movies: newTop5 });
     }
   };
-
+  const handleRemoveFromTop5 = (index) => {
+    const newFavs = [...favoriteMovies];
+    newFavs.splice(index, 1);
+    setFavoriteMovies(newFavs);
+    updateProfileSetting({ favorite_movies: newFavs });
+  };
   const handleRemoveFavorite = (index) => {
     const newFavs = [...favoriteMovies];
     newFavs.splice(index, 1);
@@ -636,42 +689,7 @@ const ProfilePage = () => {
       ...prevStats,
       most_watched_movie: movieTitle,
     }));
-
-    // 2. Call the update function to save the change to the database
     updateProfileSetting({ most_watched_movie: movieTitle });
-  };
-
-  // --- 3. MODIFIED: updateProfile function to save new settings ---
-  const updateProfile = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setMessage("");
-      const updates = {
-        id: user.id,
-        about_me: aboutMe,
-        favorite_movies: favoriteMovies, // Save the list of favorites
-        most_watched_movie: profileStats.most_watched_movie, // Save the top movie
-        favorite_movies: favoriteMovies,
-        avatar_url: avatarUrl,
-        // Add all the new privacy settings to the update object
-        is_profile_public: isProfilePublic,
-        is_stats_public: isStatsPublic,
-        is_favorites_public: isFavoritesPublic,
-        is_movie_history_public: isMovieHistoryPublic,
-        is_party_history_public: isPartyHistoryPublic,
-        prompt_for_reviews: promptForReviews,
-        suggest_anonymously: suggestAnonymously,
-        updated_at: new Date(),
-      };
-      const { error } = await supabase.from("profiles").upsert(updates);
-      if (error) throw error;
-      setMessage("Profile updated successfully!");
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const uploadAvatar = async (event) => {
@@ -1106,38 +1124,99 @@ const ProfilePage = () => {
                 {/* Tab Content */}
                 <div className="p-6">
                   {activeTab === "favorites" && (
-                    <div className="space-y-6">
-                      <p className="text-sm text-gray-400">
-                        Drag and drop to reorder your favorites. Click the star
-                        to set your top movie.
-                      </p>
-                      <div className="flex items-start gap-4 overflow-x-auto pb-4">
-                        {favoriteMovies.map((movie, index) => (
-                          <FavoriteMovieCard
-                            key={movie.id || index}
-                            movie={movie}
-                            index={index}
-                            onRemove={handleRemoveFavorite}
-                            onSetTop={handleSetTopMovie}
-                            isTop={
-                              profileStats.most_watched_movie === movie.title
-                            }
-                            onDragStart={() => (dragItem.current = index)}
-                            onDragEnter={() => (dragOverItem.current = index)}
-                            onDragEnd={handleDragSort}
-                            isDragging={dragItem.current === index}
-                          />
-                        ))}
-                      </div>
-                      {favoriteMovies.length < 5 && (
-                        <div className="mt-4">
-                          <AddFavoriteMovie
-                            onAdd={handleAddFavorite}
-                            existingFavorites={favoriteMovies}
-                          />
+                    <>
+                      <div className="bg-gray-800 p-6 rounded-xl">
+                        <label className="block text-xl font-bold text-white mb-2">
+                          Top 5 Favorite Movies
+                        </label>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Drag and drop to reorder. Click the star to set your
+                          absolute favorite.
+                        </p>
+                        <div className="flex items-start gap-4 overflow-x-auto pb-4 min-h-[13rem]">
+                          {favoriteMovies.map((movie, index) => (
+                            <FavoriteMovieCard
+                              key={movie.id || index}
+                              movie={movie}
+                              index={index}
+                              onRemove={handleRemoveFromTop5} // Use the correct remove handler
+                              onSetTop={handleSetTopMovie}
+                              isTop={
+                                profileStats.most_watched_movie === movie.title
+                              }
+                              onDragStart={() => (dragItem.current = index)}
+                              onDragEnter={() => (dragOverItem.current = index)}
+                              onDragEnd={handleDragSort}
+                              isDragging={dragItem.current === index}
+                            />
+                          ))}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                      {/* --- NEW: All Favorites Section --- */}
+                      <div className="bg-gray-800 p-6 rounded-xl">
+                        <label className="block text-xl font-bold text-white mb-2">
+                          All Favorites Collection
+                        </label>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Add movies to your collection here. You can then
+                          select from this list to feature in your "Top 5".
+                        </p>
+                        <AddFavoriteMovie
+                          onAdd={handleAddFavorite}
+                          existingFavorites={allFavoriteMovies}
+                        />
+                        <div className="space-y-3 mt-4 max-h-96 overflow-y-auto pr-2">
+                          {allFavoriteMovies.map((movie) => (
+                            <div
+                              key={movie.id}
+                              className="bg-gray-700 p-3 rounded-lg flex items-center justify-between gap-4"
+                            >
+                              <div className="flex items-center gap-4">
+                                <img
+                                  src={movie.imageUrl}
+                                  alt={movie.title}
+                                  className="w-12 h-20 object-cover rounded-md"
+                                />
+                                <div>
+                                  <h4 className="font-bold text-white">
+                                    {movie.title}
+                                  </h4>
+                                  <p className="text-sm text-gray-400">
+                                    {movie.year}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleAddFavoriteToTop5(movie)}
+                                  disabled={
+                                    favoriteMovies.length >= 5 ||
+                                    favoriteMovies.some(
+                                      (fav) => fav.id === movie.id
+                                    )
+                                  }
+                                  className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-1 px-2 rounded disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                >
+                                  {favoriteMovies.some(
+                                    (fav) => fav.id === movie.id
+                                  )
+                                    ? "In Top 5"
+                                    : "Add to Top 5"}
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleRemoveFromAllFavorites(movie.id)
+                                  }
+                                  className="p-2 text-gray-400 hover:text-red-500"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                   {activeTab === "movies" && (
                     <MovieHistoryList

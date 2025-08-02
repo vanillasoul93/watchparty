@@ -20,6 +20,7 @@ import ReviewMovieModal from "./ReviewMovieModal";
 import WatchList from "./WatchList";
 import ShareableLink from "./ShareableLink";
 import ViewersList from "./ViewersList";
+import NotificationModal from "./NotificationModal";
 import { useDebounce } from "../hooks/useDebounce";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
@@ -118,6 +119,15 @@ const ViewWatchParty = () => {
   const [modalMovieData, setModalMovieData] = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
 
+  // --- NEW: State for the full favorites list ---
+  const [allFavoriteMovies, setAllFavoriteMovies] = useState([]);
+
+  const [notification, setNotification] = useState({
+    show: false,
+    message: "",
+    type: "",
+  });
+
   useEffect(() => {
     const fetchModalData = async () => {
       if (selectedMovieId) {
@@ -143,10 +153,17 @@ const ViewWatchParty = () => {
       if (!user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("prompt_for_reviews, suggest_anonymously")
+        .select("prompt_for_reviews, suggest_anonymously, all_favorite_movies")
         .eq("id", user.id)
         .single();
       setUserProfile(data);
+      if (data) {
+        setAllFavoriteMovies(
+          Array.isArray(data.all_favorite_movies)
+            ? data.all_favorite_movies
+            : []
+        );
+      }
     };
     fetchProfile();
   }, [user]);
@@ -484,12 +501,53 @@ const ViewWatchParty = () => {
     setMovieToReview(null);
   };
 
-  const handleAddToFavorites = async () => {
-    if (!movieToReview) return;
-    alert(
-      `Adding ${movieToReview.title} to favorites! (feature to be fully connected)`
+  // --- This is the fully implemented handler function ---
+  const handleAddToFavorites = async (movieToAdd) => {
+    if (!movieToAdd) return;
+
+    const movieData = {
+      id: movieToAdd.id || movieToAdd.movie_tmdb_id,
+      title: movieToAdd.title || movieToAdd.movie_title,
+      year: movieToAdd.year,
+      imageUrl: movieToAdd.imageUrl || movieToAdd.movie_image_url,
+    };
+
+    const isAlreadyFavorite = allFavoriteMovies.some(
+      (fav) => fav.id === movieData.id
     );
-    setMovieToReview(null);
+    if (isAlreadyFavorite) {
+      //Show a "warning" notification
+      setNotification({
+        show: true,
+        message: `${movieToAdd.title} is already in your favorites!`,
+        type: "warning",
+      });
+      return;
+    }
+
+    const newFavorites = [...allFavoriteMovies, movieData];
+    setAllFavoriteMovies(newFavorites); // Optimistic UI update
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ all_favorite_movies: newFavorites })
+      .eq("id", user.id);
+
+    if (!error) {
+      //Show a "success" notification
+      setNotification({
+        show: true,
+        message: `${movieToAdd.title} has been added to your favorites!`,
+        type: "success",
+      });
+    } else {
+      setNotification({
+        show: true,
+        message: "Failed to add to favorites.",
+        type: "error",
+      });
+      setAllFavoriteMovies(allFavoriteMovies);
+    }
   };
 
   if (loading)
@@ -516,16 +574,24 @@ const ViewWatchParty = () => {
         isLoading={loadingModal}
         onClose={() => setSelectedMovieId(null)}
         onAddToHistory={handleAddToHistoryFromModal}
-        onAddToFavorites={(movie) =>
-          alert(`Favorites for ${movie.title} coming soon!`)
-        }
+        onAddToFavorites={() => handleAddToFavorites(modalMovieData)}
       />
       {movieToReview && (
         <ReviewMovieModal
           movie={movieToReview}
           onSave={handleSaveReview}
           onClose={() => setMovieToReview(null)}
-          onAddToFavorites={handleAddToFavorites}
+          onAddToFavorites={() => handleAddToFavorites(movieToReview)}
+        />
+      )}
+      {/* --- Render the NotificationModal conditionally --- */}
+      {notification.show && (
+        <NotificationModal
+          message={notification.message}
+          type={notification.type}
+          onClose={() =>
+            setNotification({ show: false, message: "", type: "" })
+          }
         />
       )}
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
@@ -567,6 +633,7 @@ const ViewWatchParty = () => {
                     intermissionTime={intermissionTime}
                     isConductor={user.id === party.conductor_id}
                     onShowReviewModal={setMovieToReview}
+                    onAddToFavorites={handleAddToFavorites}
                   />
                 </div>
 

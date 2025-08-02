@@ -14,6 +14,7 @@ import MovieDetailsModal from "./MovieDetailsModal";
 import ViewerSuggestions from "./ViewerSuggestions";
 import ViewersList from "./ViewersList";
 import ReviewMovieModal from "./ReviewMovieModal";
+import NotificationModal from "./NotificationModal";
 import {
   ArrowLeft,
   Search,
@@ -346,6 +347,14 @@ const ConductorDashboard = () => {
   const [modalMovieData, setModalMovieData] = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
 
+  const [allFavoriteMovies, setAllFavoriteMovies] = useState([]);
+
+  const [notification, setNotification] = useState({
+    show: false,
+    message: "",
+    type: "",
+  });
+
   useEffect(() => {
     const fetchModalData = async () => {
       if (selectedMovieId) {
@@ -398,8 +407,6 @@ const ConductorDashboard = () => {
   useEffect(() => {
     if (!partyId || !user) return;
 
-    // We define the refresh functions INSIDE the useEffect.
-    // This ensures they are always "fresh" for the subscription.
     const refreshVoteCounts = async () => {
       const { data } = await supabase
         .from("votes")
@@ -431,15 +438,24 @@ const ConductorDashboard = () => {
       setLoading(true);
       const [partyRes, profileRes] = await Promise.all([
         supabase.from("watch_parties").select("*").eq("id", partyId).single(),
+        // --- THIS IS THE FIX: Select all profile columns needed ---
         supabase
           .from("profiles")
-          .select("prompt_for_reviews")
+          .select("prompt_for_reviews, all_favorite_movies")
           .eq("id", user.id)
           .single(),
       ]);
       if (partyRes.error) setError("Failed to load party details.");
       else setParty(partyRes.data);
-      if (profileRes.data) setUserProfile(profileRes.data);
+      if (profileRes.data) {
+        setUserProfile(profileRes.data);
+        // Set the favorites state
+        setAllFavoriteMovies(
+          Array.isArray(profileRes.data.all_favorite_movies)
+            ? profileRes.data.all_favorite_movies
+            : []
+        );
+      }
       await Promise.all([refreshVoteCounts(), refreshSuggestionData()]);
       setLoading(false);
     };
@@ -943,12 +959,55 @@ const ConductorDashboard = () => {
     setMovieToReview(null);
   };
 
-  const handleAddToFavorites = async () => {
-    if (!movieToReview) return;
-    alert(
-      `Adding ${movieToReview.title} to favorites! (feature to be fully connected)`
+  // --- NEW: Handler to add a movie to the full favorites list ---
+  const handleAddToFavorites = async (movieToAdd) => {
+    if (!movieToAdd) return;
+
+    const isAlreadyFavorite = allFavoriteMovies.some(
+      (fav) => fav.id === movieToAdd.id
     );
-    setMovieToReview(null);
+    if (isAlreadyFavorite) {
+      //Show a "warning" notification
+      setNotification({
+        show: true,
+        message: `${movieToAdd.title} is already in your favorites!`,
+        type: "warning",
+      });
+      return;
+    }
+
+    const newFavorites = [
+      ...allFavoriteMovies,
+      {
+        id: movieToAdd.id,
+        title: movieToAdd.title,
+        year: movieToAdd.year,
+        imageUrl: movieToAdd.imageUrl,
+      },
+    ];
+
+    setAllFavoriteMovies(newFavorites); // Optimistic UI update
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ all_favorite_movies: newFavorites })
+      .eq("id", user.id);
+
+    if (!error) {
+      //Show a "success" notification
+      setNotification({
+        show: true,
+        message: `${movieToAdd.title} has been added to your favorites!`,
+        type: "success",
+      });
+    } else {
+      setNotification({
+        show: true,
+        message: "Failed to add to favorites.",
+        type: "error",
+      });
+      setAllFavoriteMovies(allFavoriteMovies);
+    }
   };
 
   if (loading)
@@ -966,9 +1025,7 @@ const ConductorDashboard = () => {
         isLoading={loadingModal}
         onClose={() => setSelectedMovieId(null)}
         onAddToHistory={handleAddToHistoryFromModal}
-        onAddToFavorites={(movie) =>
-          alert(`Favorites for ${movie.title} coming soon!`)
-        }
+        onAddToFavorites={() => handleAddToFavorites(modalMovieData)}
       />
 
       {movieToReview && (
@@ -976,7 +1033,7 @@ const ConductorDashboard = () => {
           movie={movieToReview}
           onSave={handleSaveReview}
           onClose={() => setMovieToReview(null)}
-          onAddToFavorites={handleAddToFavorites}
+          onAddToFavorites={() => handleAddToFavorites(movieToReview)}
         />
       )}
       {showCrashConfirmation && (
@@ -1103,6 +1160,16 @@ const ConductorDashboard = () => {
           </div>
         </div>
       )}
+      {/* --- 4. Render the NotificationModal conditionally --- */}
+      {notification.show && (
+        <NotificationModal
+          message={notification.message}
+          type={notification.type}
+          onClose={() =>
+            setNotification({ show: false, message: "", type: "" })
+          }
+        />
+      )}
 
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
         <div className="container mx-auto px-4">
@@ -1173,6 +1240,7 @@ const ConductorDashboard = () => {
                   intermissionTime={intermissionTime}
                   isConductor={true}
                   onShowReviewModal={setMovieToReview}
+                  onAddToFavorites={handleAddToFavorites}
                 />
                 <StreamLinkCard
                   initialUrl={party.stream_url}

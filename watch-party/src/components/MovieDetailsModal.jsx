@@ -164,7 +164,7 @@ const MovieDetailsModal = ({
                       Mark as Watched
                     </button>
                     <button
-                      onClick={() => alert("Add to Favorites clicked!")}
+                      onClick={() => onAddToFavorites(movie)}
                       className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg"
                     >
                       Favorite

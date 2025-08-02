@@ -22,6 +22,7 @@ const WatchList = ({
   intermissionTime,
   isConductor,
   onShowReviewModal,
+  onAddToFavorites,
 }) => {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   // --- NEW: State for the movie details modal ---
@@ -96,6 +97,7 @@ const WatchList = ({
         movie={modalMovieData}
         onClose={() => setSelectedMovieId(null)}
         onAddToHistory={handleAddToHistoryFromModal}
+        onAddToFavorites={onAddToFavorites}
       />
       {/* 1. Make the main container a flex column that takes up the full height of its parent */}
       <div className="bg-gray-900 p-4 rounded-lg flex flex-col max-h-190 h-full">
