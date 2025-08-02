@@ -48,24 +48,33 @@ const ReviewMovieModal = ({ movie, onSave, onClose, onAddToFavorites }) => {
   const [review, setReview] = useState("");
   const [backdropUrl, setBackdropUrl] = useState("");
 
-  // Fetch movie details to get a backdrop image for the modal
+  // --- MODIFIED: This effect now pre-fills the form for editing ---
   useEffect(() => {
     const fetchBackdrop = async () => {
       if (movie) {
-        const details = await getMovieDetailsWithCredits(movie.id);
+        // Pre-fill the state with the item's existing data if it exists
+        setRating(movie.rating || 0);
+        setReview(movie.review || "");
+
+        // Fetch backdrop using the correct ID, whether it's a new movie or a history item
+        const movieId = movie.movie_tmdb_id || movie.id;
+        const details = await getMovieDetailsWithCredits(movieId);
         if (details?.backdropUrl) {
           setBackdropUrl(details.backdropUrl);
         }
       }
     };
     fetchBackdrop();
-  }, [movie]);
+  }, [movie]); // Re-run when the movie to review/edit changes
 
   const handleSave = () => {
     onSave({ rating, review });
   };
 
   if (!movie) return null;
+
+  // Check if we are in "edit mode" (the movie object has a `created_at` field from the history table)
+  const isEditMode = !!movie.created_at;
 
   return (
     <div className="fixed inset-0 bg-gray-900/90 flex items-center justify-center z-50 p-4 h-screen">
@@ -86,15 +95,18 @@ const ReviewMovieModal = ({ movie, onSave, onClose, onAddToFavorites }) => {
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-1">
               <img
-                src={movie.imageUrl}
-                alt={movie.title}
+                src={movie.imageUrl || movie.movie_image_url}
+                alt={movie.title || movie.movie_title}
                 className="w-full h-auto object-cover rounded-lg shadow-2xl"
               />
             </div>
             <div className="md:col-span-2 text-white flex flex-col">
-              <h2 className="text-3xl font-bold mb-2">Movie Finished!</h2>
+              {/* --- MODIFIED: Dynamic Header --- */}
+              <h2 className="text-3xl font-bold mb-2">
+                {isEditMode ? "Edit Your Review" : "Movie Finished!"}
+              </h2>
               <p className="text-gray-400 mb-6">
-                Log your thoughts for "{movie.title}"
+                Log your thoughts for "{movie.title || movie.movie_title}"
               </p>
 
               <div className="space-y-6 flex-grow">
@@ -122,11 +134,12 @@ const ReviewMovieModal = ({ movie, onSave, onClose, onAddToFavorites }) => {
                   onClick={handleSave}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg"
                 >
-                  Save to My Watch History
+                  {isEditMode ? "Update Review" : "Save to My Watch History"}
                 </button>
                 <button
                   onClick={onAddToFavorites}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg"
+                  disabled={isEditMode} // Disable "Add to Favorites" when editing
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed"
                 >
                   Add to Favorites
                 </button>
