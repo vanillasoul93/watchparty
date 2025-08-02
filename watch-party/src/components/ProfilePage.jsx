@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
 import { Link } from "react-router-dom";
@@ -20,9 +20,10 @@ import {
   Search,
   Edit3,
   AlertTriangle,
+  X,
   Users as PartyIcon,
 } from "lucide-react";
-import { searchTMDb } from "../api/tmdb"; // Assuming your centralized search is here
+import { searchTMDb, getMovieDetailsWithCredits } from "../api/tmdb"; // Assuming your centralized search is here
 import { useDebounce } from "../hooks/useDebounce"; // Assuming you have this hook
 
 // Helper component to render stars from a numeric rating
@@ -182,79 +183,55 @@ const AddFavoriteMovie = ({ onAdd, existingFavorites = [] }) => {
   );
 };
 
-// --- MODIFIED: MovieHistoryList now accepts edit and delete handlers ---
-const MovieHistoryList = ({ history, onEdit, onDelete }) => {
+// --- FINAL STEP: Update the MovieHistoryList component ---
+const MovieHistoryList = ({ groupedHistory, onSelectMovie, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredHistory = history.filter((item) =>
-    item.movie_title.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredMovies = Object.values(groupedHistory).filter((reviews) =>
+    reviews[0].movie_title.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  if (!history || history.length === 0) {
-    return (
-      <p className="text-gray-400 text-center py-4">No movie history found.</p>
-    );
-  }
 
   return (
     <div className="space-y-4">
       <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="text-gray-400" size={20} />
-        </div>
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
-          placeholder="Search your movie history..."
+          // ... (rest of the input props)
         />
       </div>
-
-      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-        {filteredHistory.length > 0 ? (
-          filteredHistory.map((item) => (
-            <div
-              key={item.id}
-              className="bg-gray-700 p-4 rounded-lg flex gap-4"
-            >
-              <img
-                src={item.movie_image_url}
-                alt={item.movie_title}
-                className="w-16 h-24 object-cover rounded-md"
-              />
-              <div className="flex-grow">
-                <h4 className="font-bold text-white">{item.movie_title}</h4>
-                <div className="flex items-center gap-2 my-1">
-                  <DisplayRating rating={item.rating} />
-                  <span className="text-sm text-gray-300">
-                    ({item.rating}/5.0)
-                  </span>
+      <div className="space-y-4 max-h-160 overflow-y-auto pr-2">
+        {filteredMovies.length > 0 ? (
+          filteredMovies.map((reviews) => {
+            const latestReview = reviews[0];
+            return (
+              <div
+                key={latestReview.movie_tmdb_id}
+                onClick={() => onSelectMovie(reviews)}
+                className="bg-gray-700 p-4 rounded-lg flex gap-4 cursor-pointer hover:bg-gray-600 transition-colors"
+              >
+                <img
+                  src={latestReview.movie_image_url}
+                  alt={latestReview.movie_title}
+                  className="w-16 h-24 object-cover rounded-md"
+                />
+                <div className="flex-grow">
+                  <h4 className="font-bold text-white">
+                    {latestReview.movie_title}
+                  </h4>
+                  <p className="text-gray-400 text-sm">
+                    You've watched this movie {reviews.length} time
+                    {reviews.length > 1 ? "s" : ""}.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Last watched on:{" "}
+                    {new Date(latestReview.watched_at).toLocaleDateString()}
+                  </p>
                 </div>
-                <p className="text-sm text-gray-300 italic">
-                  "{item.review || "No review."}"
-                </p>
-                <p className="text-xs text-gray-500 mt-2">
-                  Logged on: {new Date(item.watched_at).toLocaleDateString()}
-                </p>
               </div>
-              {/* --- NEW: Edit and Delete Buttons --- */}
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => onEdit(item)}
-                  className="p-2 text-gray-400 hover:text-indigo-400 transition-colors"
-                >
-                  <Edit3 size={16} />
-                </button>
-                <button
-                  onClick={() => onDelete(item.id)}
-                  className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <p className="text-gray-400 text-center py-4">No movies found.</p>
         )}
@@ -310,6 +287,86 @@ const PrivacyToggle = ({ label, isPublic, onToggle }) => (
   </div>
 );
 
+const MovieReviewHistoryModal = ({
+  movieDetails,
+  reviews,
+  onClose,
+  onEditReview,
+  onDeleteReview,
+}) => {
+  if (!movieDetails || !reviews) return null; // Don't render if data isn't ready
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[55] p-4 h-screen">
+      <div
+        className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative bg-cover bg-center shadow-2xl shadow-black/60"
+        style={{
+          backgroundImage: `linear-gradient(rgba(17, 24, 39, 0.9), rgba(17, 24, 39, 1)), url(${movieDetails.backdropUrl})`,
+        }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-white z-20"
+        >
+          <X size={28} />
+        </button>
+        <div className="p-8 md:p-12">
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-1">
+              <img
+                src={movieDetails.imageUrl}
+                alt={movieDetails.title}
+                className="w-full h-auto object-cover rounded-lg shadow-2xl"
+              />
+            </div>
+            <div className="md:col-span-2 text-white">
+              <h2 className="text-3xl font-bold mb-2">
+                Your Review History for
+              </h2>
+              <h3 className="text-4xl font-bold text-indigo-300 mb-6">
+                {movieDetails.title} ({movieDetails.year})
+              </h3>
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {reviews.map((review) => (
+                  <div
+                    key={review.id}
+                    className="bg-gray-800/50 p-4 rounded-lg flex justify-between items-start"
+                  >
+                    <div>
+                      <DisplayRating rating={review.rating} />
+                      <p className="text-gray-300 italic mt-2">
+                        "{review.review || "No review written."}"
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Logged on:{" "}
+                        {new Date(review.watched_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-shrink-0 ml-4">
+                      <button
+                        onClick={() => onEditReview(review)}
+                        className="p-2 text-gray-400 hover:text-indigo-400 transition-colors"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      <button
+                        onClick={() => onDeleteReview(review.id)}
+                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProfilePage = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -358,17 +415,53 @@ const ProfilePage = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // --- NEW: State for the review history modal ---
+  const [selectedMovieHistory, setSelectedMovieHistory] = useState(null);
+
   // --- NEW: State to manage the delete confirmation dialog ---
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
 
-  // --- NEW: Handlers for editing and deleting history ---
-  const handleEditHistoryItem = (item) => {
-    setEditingHistoryItem(item); // This will open the review modal in "edit" mode
+  const [modalMovieDetails, setModalMovieDetails] = useState(null); // This will hold the detailed movie info
+  const [loadingModal, setLoadingModal] = useState(false);
+
+  // --- NEW: This effect fetches the details when a movie is selected ---
+  useEffect(() => {
+    const fetchDetailsForModal = async () => {
+      if (selectedMovieHistory && selectedMovieHistory.length > 0) {
+        setLoadingModal(true);
+        const movieId = selectedMovieHistory[0].movie_tmdb_id;
+        const details = await getMovieDetailsWithCredits(movieId);
+        setModalMovieDetails(details);
+        setLoadingModal(false);
+      }
+    };
+    fetchDetailsForModal();
+  }, [selectedMovieHistory]);
+
+  const closeHistoryModal = () => {
+    setSelectedMovieHistory(null);
+    setModalMovieDetails(null);
   };
 
+  // --- MODIFIED: Group the movie history by movie ID ---
+  const groupedMovieHistory = useMemo(() => {
+    if (!movieHistory) return {};
+    return movieHistory.reduce((acc, item) => {
+      acc[item.movie_tmdb_id] = acc[item.movie_tmdb_id] || [];
+      acc[item.movie_tmdb_id].push(item);
+      return acc;
+    }, {});
+  }, [movieHistory]);
+
+  const handleEditHistoryItem = (item) => {
+    setSelectedMovieHistory(null); // Close the history modal
+    setEditingHistoryItem(item); // Open the review/edit modal
+  };
+
+  // --- MODIFIED: This function now opens the confirmation dialog ---
   const handleDeleteHistoryItem = (historyId) => {
     setItemToDelete(historyId); // Store the ID of the item to be deleted
     setShowDeleteConfirm(true); // Show the dialog
@@ -384,9 +477,12 @@ const ProfilePage = () => {
       .eq("id", itemToDelete);
 
     if (!error) {
+      // Optimistically update the UI
       setMovieHistory((currentHistory) =>
         currentHistory.filter((item) => item.id !== itemToDelete)
       );
+      // If the review history modal is open for the movie that was just deleted, close it.
+      setSelectedMovieHistory(null);
     } else {
       setError("Failed to delete history item.");
     }
@@ -662,6 +758,13 @@ const ProfilePage = () => {
 
   return (
     <>
+      <MovieReviewHistoryModal
+        movieDetails={modalMovieDetails}
+        reviews={selectedMovieHistory}
+        onClose={closeHistoryModal}
+        onEditReview={handleEditHistoryItem}
+        onDeleteReview={handleDeleteHistoryItem}
+      />
       {/* The ReviewMovieModal is now also used for editing */}
       <ReviewMovieModal
         movie={editingHistoryItem}
@@ -671,10 +774,9 @@ const ProfilePage = () => {
           alert("This action is not available while editing.")
         }
       />
-      {/* --- NEW: Custom Delete Confirmation Dialog --- */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl drop-shadow-2xl">
+        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-[60] p-4">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl">
             <AlertTriangle size={48} className="mx-auto text-yellow-400 mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">
               Delete Review?
@@ -1039,8 +1141,11 @@ const ProfilePage = () => {
                   )}
                   {activeTab === "movies" && (
                     <MovieHistoryList
-                      history={movieHistory}
-                      onEdit={handleEditHistoryItem}
+                      // Pass the grouped history and new handler
+                      groupedHistory={groupedMovieHistory}
+                      onSelectMovie={(reviews) =>
+                        setSelectedMovieHistory(reviews)
+                      }
                       onDelete={handleDeleteHistoryItem}
                     />
                   )}
