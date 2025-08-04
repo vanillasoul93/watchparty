@@ -253,7 +253,7 @@ const PartySettings = ({ party, onUpdate }) => {
               value={votes}
               onChange={(e) => setVotes(parseInt(e.target.value, 10))}
               // This class hides the default spinners
-              className="w-24 bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-24 bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-2 text-center focus:outline-none focus:border-indigo-600 hover:border-gray-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               min="1"
               max="10"
             />
@@ -281,7 +281,7 @@ const PartySettings = ({ party, onUpdate }) => {
               type="number"
               value={suggestions}
               onChange={(e) => setSuggestions(parseInt(e.target.value, 10))}
-              className="w-24 bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-2 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-24 bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-2 text-center focus:outline-none focus:border-indigo-600 hover:border-gray-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               min="0"
               max="5"
             />
@@ -749,11 +749,19 @@ const ConductorDashboard = () => {
         status: "concluded",
         end_time: new Date().toISOString(),
       });
-      navigate("/conductors");
+      handleConfirmCrash(false);
     }
   };
 
   const handleConfirmCrash = (markAsWatched) => {
+    const channel = supabase.channel(`party:${partyId}`);
+    channel.send({
+      type: "broadcast",
+      event: "party-crashed",
+      payload: { message: "The conductor has ended the party." },
+    });
+    supabase.removeChannel(channel);
+    console.log("PARTY ID = " + partyId);
     let updates = { status: "concluded", end_time: new Date().toISOString() };
     if (markAsWatched && nowPlayingMovieDetails) {
       const finishedMovie = {
@@ -765,7 +773,7 @@ const ConductorDashboard = () => {
     }
     updatePartyStatus(updates);
     setShowCrashConfirmation(false);
-    navigate("/conductors");
+    navigate("/review-party/" + partyId);
   };
 
   const handleCancelCrash = () => {

@@ -361,6 +361,9 @@ const ViewWatchParty = () => {
           refreshSuggestionData();
         }
       )
+      .on("broadcast", { event: "party-crashed" }, (payload) => {
+        navigate(`/review-party/${partyId}`);
+      })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           partyChannel.on(
