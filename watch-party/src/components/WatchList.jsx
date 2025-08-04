@@ -100,7 +100,7 @@ const WatchList = ({
         onAddToFavorites={onAddToFavorites}
       />
       {/* 1. Make the main container a flex column that takes up the full height of its parent */}
-      <div className="bg-gray-900 p-4 rounded-lg flex flex-col max-h-190 h-full">
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-4 rounded-lg flex flex-col max-h-190 h-full">
         <h3 className="font-bold text-white mb-3 flex items-center gap-2">
           <Clapperboard size={20} /> Watch List
         </h3>
@@ -110,7 +110,7 @@ const WatchList = ({
           {upNext && (
             <li
               onClick={() => setSelectedMovieId(upNext.id)}
-              className="bg-gray-900 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 flex items-center gap-3 border-2 border-dashed border-blue-500 p-2 rounded-lg cursor-pointer "
+              className="bg-gray-900/80 shadow-lg shadow-black/20 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 flex items-center gap-3 border-2 border-dashed border-blue-500 p-2 rounded-lg cursor-pointer "
             >
               <img
                 src={upNext.imageUrl}
@@ -145,7 +145,7 @@ const WatchList = ({
               <li>
                 <div
                   onClick={() => setSelectedMovie(nowPlaying)}
-                  className="bg-gray-900 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 flex items-center justify-between gap-3 border-2 border-green-500 p-2 rounded-lg"
+                  className="bg-gray-900/80 shadow-lg shadow-black/20 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 flex items-center justify-between gap-3 border-2 border-green-500 p-2 rounded-lg"
                 >
                   <div
                     onClick={() => setSelectedMovieId(nowPlaying.id)}
@@ -221,7 +221,7 @@ const WatchList = ({
             return (
               <li
                 key={`${movie.id}-${originalIndex}`}
-                className="bg-gray-900 p-3 mr-4 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-gray-800 "
+                className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 mr-4 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-slate-800 "
               >
                 <div
                   onClick={() => setSelectedMovieId(movie.id)}

@@ -5,7 +5,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 const ViewerSuggestions = ({ suggestions, onMoveToPoll, onSelectMovie }) => {
   const [parent] = useAutoAnimate({ duration: 500 });
   return (
-    <div className="bg-gray-900 p-4 rounded-lg">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-4 rounded-lg">
       <h3 className="font-bold text-white mb-4 flex items-center gap-2">
         <PlusCircle size={20} /> Viewer Suggestions
       </h3>
@@ -14,7 +14,7 @@ const ViewerSuggestions = ({ suggestions, onMoveToPoll, onSelectMovie }) => {
           {suggestions.map((suggestion) => (
             <li
               key={suggestion.id}
-              className="bg-gray-800 p-3 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
+              className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
             >
               <div
                 onClick={() => onSelectMovie(suggestion.movie_tmdb_id)}

@@ -51,7 +51,7 @@ const PartyInviteCard = ({ party }) => {
   };
 
   return (
-    <div className="bg-gray-900 p-6 rounded-lg space-y-4">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-6 rounded-lg space-y-4">
       {/* Shareable Link */}
       <div>
         <h3 className="font-bold text-white mb-2 flex items-center gap-2">
@@ -140,7 +140,7 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
         type="text"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
+        className="w-full bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:border-indigo-700 focus:outline-none transition"
         placeholder="Search for a movie to add..."
       />
       {loading && (
@@ -180,7 +180,7 @@ const StreamLinkCard = ({ initialUrl, onUpdate }) => {
   };
 
   return (
-    <div className="bg-gray-900 p-6 rounded-lg">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-6 rounded-lg">
       <h3 className="font-bold text-white mb-4 flex items-center gap-2">
         <LinkIcon size={20} /> Stream Link
       </h3>
@@ -239,7 +239,7 @@ const PartySettings = ({ party, onUpdate }) => {
   };
 
   return (
-    <div className="bg-gray-900 p-6 rounded-lg flex flex-col h-full">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-6 rounded-lg flex flex-col h-full">
       <h3 className="font-bold text-white mb-4 flex items-center gap-2">
         <Settings size={20} /> Party Settings
       </h3>
@@ -1061,7 +1061,7 @@ const ConductorDashboard = () => {
         />
       )}
       {showCrashConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-4">Crash Party?</h2>
             <p className="text-gray-300 mb-6">
@@ -1092,8 +1092,8 @@ const ConductorDashboard = () => {
         </div>
       )}
       {showZeroVotesDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl">
+        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-8 max-w-lg w-full text-center shadow-2xl shadow-black/20">
             <h2 className="text-2xl font-bold text-white mb-4">
               No Votes Received
             </h2>
@@ -1216,7 +1216,7 @@ const ConductorDashboard = () => {
                   type="text"
                   value={partyTitleInput}
                   onChange={(e) => setPartyTitleInput(e.target.value)}
-                  className="bg-gray-700 border-2 border-gray-600 text-white text-4xl md:text-5xl font-extrabold text-center rounded-lg p-2"
+                  className="bg-slate-800 border-2 border-gray-600 text-white text-4xl md:text-5xl font-extrabold text-center rounded-lg p-2 focus:outline-none focus:border-indigo-700"
                 />
                 <button
                   onClick={handleSaveTitle}
@@ -1249,7 +1249,7 @@ const ConductorDashboard = () => {
             </p>
           </div>
 
-          <div className="bg-gray-800 rounded-xl shadow-lg p-8">
+          <div className="bg-transparent rounded-xl">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 flex flex-col space-y-6">
                 <WatchList

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 const ViewersList = ({ viewers }) => {
   return (
-    <div className="bg-gray-900 p-4 rounded-lg flex flex-col h-full">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-4 rounded-lg flex flex-col h-full">
       <h3 className="font-bold text-white mb-2 flex items-center gap-2 flex-shrink-0">
         <Users size={20} /> Viewers ({viewers?.length || 0})
       </h3>

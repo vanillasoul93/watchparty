@@ -26,9 +26,9 @@ const MoviePoll = ({
 
   return (
     <div
-      className={`bg-gray-900 p-4 rounded-lg transition-all duration-300 ${
+      className={`bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-4 rounded-lg transition-all duration-300 ${
         isVotingOpen
-          ? "shadow-lg shadow-indigo-500/40 ring-1 ring-indigo-500/50"
+          ? "shadow-sm shadow-indigo-500/20 ring-1 ring-indigo-500/50"
           : "shadow-none"
       }`}
     >
@@ -88,7 +88,7 @@ const MoviePoll = ({
           {sortedMovies.map((movie) => (
             <li
               key={movie.id}
-              className="bg-gray-800 p-3 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
+              className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
             >
               <div
                 onClick={() => onSelectMovie(movie.id)}

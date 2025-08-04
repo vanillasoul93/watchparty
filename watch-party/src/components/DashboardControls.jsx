@@ -13,7 +13,7 @@ const DashboardControls = ({
   isVotingOpen,
 }) => {
   return (
-    <div className="bg-gray-900 p-6 rounded-lg">
+    <div className="bg-gray-200 p-6 rounded-lg">
       <h3 className="font-bold text-white mb-4">Dashboard Controls</h3>
       <div className="space-y-4">
         <div className="grid grid-cols-3 gap-4">

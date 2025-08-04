@@ -59,7 +59,7 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
         type="text"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:ring-2 focus:ring-indigo-500 transition"
+        className="w-full bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-3 pl-10 focus:outline-none focus:border-indigo-600 transition"
         placeholder="Search for a movie to add..."
       />
       {loading && (
@@ -644,7 +644,7 @@ const ViewWatchParty = () => {
               <ShareableLink link={party.stream_url} />
             </div>
           )}
-          <div className="bg-gray-800 rounded-xl shadow-lg p-8">
+          <div className="bg-gray-900 p-3">
             <div className="grid md:grid-cols-3 gap-8">
               {/* --- MODIFIED: Added flex flex-col to the column wrapper --- */}
               <div className="md:col-span-1 space-y-6 flex flex-col">
@@ -663,15 +663,15 @@ const ViewWatchParty = () => {
                   />
                 </div>
 
-                <div className="bg-gray-900 p-4 rounded-lg flex-shrink-0">
+                <div className="flex-shrink-0">
                   <ViewersList viewers={viewers} />
                 </div>
               </div>
               <div className="md:col-span-2 space-y-8">
                 <div
-                  className={`bg-gray-900 p-4 rounded-lg transition-all duration-300 ${
+                  className={`bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-4 rounded-lg transition-all duration-300 ${
                     party.voting_open
-                      ? "shadow-lg shadow-indigo-500/40 ring-1 ring-indigo-500/50"
+                      ? "shadow-sm shadow-indigo-500/20 ring-1 ring-indigo-500/50"
                       : "shadow-none"
                   }`}
                 >
@@ -686,13 +686,13 @@ const ViewWatchParty = () => {
                   </div>
                   {party.voting_open ? (
                     <ul
-                      className="space-y-2 max-h-100 overflow-y-auto p-1"
+                      className="space-y-2 max-h-100 overflow-y-auto p-1 pr-2 [overflow-anchor:none] "
                       ref={pollListRef}
                     >
                       {sortedPollMovies.map((movie) => (
                         <li
                           key={movie.id}
-                          className="bg-gray-800 p-3 rounded-md flex items-center justify-between  transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
+                          className="bg-gray-900/80 p-3 rounded-md flex items-center justify-between  transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30"
                         >
                           <div
                             onClick={() => setSelectedMovieId(movie.id)}
@@ -736,7 +736,7 @@ const ViewWatchParty = () => {
                     </p>
                   )}
                 </div>
-                <div className="bg-gray-900 p-4 rounded-lg">
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-black/10 p-4 rounded-lg">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-white flex items-center gap-2">
                       <PlusCircle size={20} /> Suggestions
@@ -766,7 +766,7 @@ const ViewWatchParty = () => {
                           <li
                             key={suggestion.id}
                             // Conditionally add the border class
-                            className={`bg-gray-800 p-3 rounded-md flex items-center justify-between border-2 border-dashed hover:border-solid ${
+                            className={`bg-gray-900/80 p-3 rounded-md flex items-center justify-between border-2 border-dashed hover:border-solid ${
                               isMySuggestion
                                 ? "border-indigo-600"
                                 : "border-transparent"
