@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
 import {
@@ -92,6 +92,8 @@ const MovieSearchInput = ({ onSelect, existingIds = [] }) => {
 const ViewWatchParty = () => {
   const { partyId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromTab = searchParams.get("from"); // This will be 'conducting', 'active', etc.
   const { user } = useAuth();
   const userProfileRef = useRef();
 
@@ -626,7 +628,9 @@ const ViewWatchParty = () => {
       <div className="bg-gray-900 min-h-screen pt-24 pb-12">
         <div className="container mx-auto px-4">
           <button
-            onClick={() => navigate("/conductor-hub")}
+            onClick={() =>
+              navigate("/conductor-hub", { state: { fromTab: fromTab } })
+            }
             className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6"
           >
             <ArrowLeft size={20} /> Back to Hub

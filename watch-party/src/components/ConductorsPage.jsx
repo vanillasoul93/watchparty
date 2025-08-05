@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getMovieDetails, getMovieBackdrops } from "../api/tmdb";
 import {
   PlayCircle,
@@ -32,6 +32,7 @@ const PartyCard = ({
   onReopenParty,
   onDeleteParty,
   isConcluded,
+  activeTab,
 }) => {
   // ... PartyCard component remains the same ...
   const navigate = useNavigate();
@@ -208,14 +209,11 @@ const PartyCard = ({
                   ) : (
                     <PauseCircle size={18} className="text-yellow-400" />
                   )}
-                  <span>
-                    {isPlaying ? "Playing: " : "Paused: "}
-                    <span className="font-semibold text-white ml-1">
-                      {nowPlayingDetails?.title +
-                        " (" +
-                        nowPlayingDetails?.year +
-                        ")" || "N/A"}
-                    </span>
+
+                  <span className="truncate">
+                    {isPlaying ? "Playing" : "Paused"}:{" "}
+                    {nowPlayingDetails?.title}{" "}
+                    {nowPlayingDetails?.year && `(${nowPlayingDetails.year})`}
                   </span>
                 </div>
               )}
@@ -239,7 +237,9 @@ const PartyCard = ({
             isConductor ? (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => navigate(`/dashboard/${party.id}`)}
+                  onClick={() =>
+                    navigate(`/dashboard/${party.id}?from=${activeTab}`)
+                  }
                   className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
                 >
                   <LayoutDashboard size={18} /> Dashboard
@@ -253,7 +253,7 @@ const PartyCard = ({
               </div>
             ) : (
               <button
-                onClick={() => navigate(`/party/${party.id}`)}
+                onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
                 className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-4 rounded-lg"
               >
                 Join
@@ -270,7 +270,7 @@ const PartyCard = ({
                 </button>
               )}
               <button
-                onClick={() => alert("Review feature coming soon!")}
+                onClick={() => navigate(`/review-party/${party.id}`)}
                 className="col-span-3 bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
               >
                 <Star size={18} /> Review
@@ -284,7 +284,9 @@ const PartyCard = ({
             </div>
           ) : (
             <button
-              onClick={() => alert("Review feature coming soon!")}
+              onClick={() =>
+                navigate(`/review-party/${party.id}?from=${activeTab}`)
+              }
               className="w-full bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
             >
               <Star size={18} />
@@ -307,6 +309,7 @@ const CompactPartyCard = ({
   onSelectDashboard,
   onJoinParty,
   isConcluded,
+  activeTab,
 }) => {
   const navigate = useNavigate();
   const [nowPlayingDetails, setNowPlayingDetails] = useState(null);
@@ -451,7 +454,9 @@ const CompactPartyCard = ({
             </div>
           ) : (
             <button
-              onClick={() => alert("Review feature coming soon!")}
+              onClick={() =>
+                navigate(`/review-party/${party.id}?from=${activeTab}`)
+              }
               className="w-full bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
             >
               <Star size={16} /> Review Party
@@ -460,7 +465,9 @@ const CompactPartyCard = ({
         ) : isConductor ? (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate(`/dashboard/${party.id}`)}
+              onClick={() =>
+                navigate(`/dashboard/${party.id}?from=${activeTab}`)
+              }
               className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
             >
               <LayoutDashboard size={16} /> Dashboard
@@ -474,7 +481,7 @@ const CompactPartyCard = ({
           </div>
         ) : (
           <button
-            onClick={() => navigate(`/party/${party.id}`)}
+            onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
             className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm"
           >
             Join Party
@@ -495,6 +502,7 @@ const ListPartyCard = ({
   onSelectDashboard,
   onJoinParty,
   isConcluded,
+  activeTab,
 }) => {
   const navigate = useNavigate();
   const isConductor = currentUser && currentUser.id === party.conductor_id;
@@ -544,7 +552,9 @@ const ListPartyCard = ({
             </div>
           ) : (
             <button
-              onClick={() => alert("Review feature coming soon!")}
+              onClick={() =>
+                navigate(`/review-party/${party.id}?from=${activeTab}`)
+              }
               className="bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
             >
               <Star size={16} /> Review
@@ -552,14 +562,14 @@ const ListPartyCard = ({
           )
         ) : isConductor ? (
           <button
-            onClick={() => navigate(`/dashboard/${party.id}`)}
+            onClick={() => navigate(`/dashboard/${party.id}?from=${activeTab}`)}
             className="bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
           >
             <LayoutDashboard size={16} /> Dashboard
           </button>
         ) : (
           <button
-            onClick={() => navigate(`/party/${party.id}`)}
+            onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
             className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm"
           >
             Join
@@ -573,6 +583,7 @@ const ListPartyCard = ({
 const ConductorsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [myActiveParties, setMyActiveParties] = useState([]);
   const [activePublicParties, setActivePublicParties] = useState([]);
@@ -586,6 +597,13 @@ const ConductorsPage = () => {
   const [activeTab, setActiveTab] = useState("conducting"); // 'conducting', 'active', 'concluded'
 
   const [viewMode, setViewMode] = useState("card"); // 'card', 'compact', or 'list'
+
+  useEffect(() => {
+    // Check if state was passed during navigation
+    if (location.state?.fromTab) {
+      setActiveTab(location.state.fromTab);
+    }
+  }, [location.state]);
 
   // --- 1. fetchParties is now defined in the component scope and wrapped in useCallback ---
   const fetchParties = useCallback(async () => {
@@ -672,6 +690,7 @@ const ConductorsPage = () => {
       onReopenParty: handleReopenParty,
       onDeleteParty: handleDeleteParty,
       isConcluded,
+      activeTab: activeTab,
     };
     switch (viewMode) {
       case "compact":

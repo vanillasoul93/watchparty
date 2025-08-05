@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { useAuth } from "../contexts/Auth";
 import { supabase } from "../supabaseClient";
 import { getMovieDetails, getMovieDetailsWithCredits } from "../api/tmdb"; // We'll use this to get movie posters
@@ -27,6 +32,10 @@ const ReviewParty = () => {
     message: "",
     type: "",
   });
+
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromTab = searchParams.get("from"); // This will be 'conducting', 'active', etc.
 
   useEffect(() => {
     const fetchPartyDetails = async () => {
@@ -290,12 +299,14 @@ const ReviewParty = () => {
           </div>
 
           <div className="text-center mt-8">
-            <Link
-              to="/conductor-hub"
+            <button
               className="bg-slate-800 hover:bg-indigo-900 text-indigo-400 font-bold py-3 px-6 rounded-lg transition-colors"
+              onClick={() =>
+                navigate("/conductor-hub", { state: { fromTab: fromTab } })
+              }
             >
               Back to Hub
-            </Link>
+            </button>
           </div>
         </div>
       </div>
