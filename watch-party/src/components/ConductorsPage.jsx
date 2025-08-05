@@ -23,7 +23,64 @@ import {
   View,
   List,
   Grid,
+  MoreVertical,
 } from "lucide-react";
+
+// --- NEW: A reusable "More Options" menu component ---
+const MoreOptionsMenu = ({
+  party,
+  canReopen,
+  onReopenParty,
+  onDeleteParty,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-2 bg-gray-700 hover:bg-indigo-900 text-gray-300 hover:text-white rounded-lg"
+      >
+        <MoreVertical size={18} />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-10">
+          {canReopen && (
+            <button
+              onClick={() => {
+                onReopenParty(party.id);
+                setIsOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-indigo-600/20 flex items-center gap-3"
+            >
+              <RefreshCw size={16} /> Re-Open Party
+            </button>
+          )}
+          <button
+            onClick={() => {
+              onDeleteParty(party.id);
+              setIsOpen(false);
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600/20 outline-none border-0 flex rounded-lg items-center gap-3"
+          >
+            <Trash2 size={16} /> Delete Party
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const PartyCard = ({
   party,
@@ -499,8 +556,6 @@ const ListPartyCard = ({
   onCrashParty,
   onReopenParty,
   onDeleteParty,
-  onSelectDashboard,
-  onJoinParty,
   isConcluded,
   activeTab,
 }) => {
@@ -512,7 +567,7 @@ const ListPartyCard = ({
     new Date() - new Date(party.end_time) < 3600000;
 
   return (
-    <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 shadow-lg shadow-black/20 rounded-lg p-3 flex items-center justify-between gap-4">
+    <div className="bg-gray-800 rounded-lg p-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-4 truncate">
         <img
           src={
@@ -520,7 +575,7 @@ const ListPartyCard = ({
             "https://placehold.co/100x100/1a202c/ffffff?text=?"
           }
           alt={party.featured_movie}
-          className="w-15 h-24 object-cover rounded-md flex-shrink-0"
+          className="w-12 h-18 object-cover rounded-md flex-shrink-0"
         />
         <div className="truncate">
           <p className="font-semibold text-white truncate">
@@ -531,48 +586,32 @@ const ListPartyCard = ({
           </p>
         </div>
       </div>
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex items-center gap-2">
         {isConcluded ? (
-          isConductor ? (
-            <div className="flex items-center gap-2">
-              {canReopen && (
-                <button
-                  onClick={() => onReopenParty(party.id)}
-                  className="bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm"
-                >
-                  Re-Open
-                </button>
-              )}
-              <button
-                onClick={() => onDeleteParty(party.id)}
-                className="bg-gray-700 hover:bg-red-900 text-red-400 font-bold py-2 px-3 rounded-lg text-sm"
-              >
-                Delete
-              </button>
-            </div>
-          ) : (
+          <div className="flex items-center gap-2">
             <button
               onClick={() =>
                 navigate(`/review-party/${party.id}?from=${activeTab}`)
               }
-              className="bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
+              className="bg-gray-700 hover:bg-sky-950 text-sky-400 font-bold py-2 w-32 rounded-lg text-sm flex items-center justify-center gap-2"
             >
               <Star size={16} /> Review
             </button>
-          )
-        ) : isConductor ? (
-          <button
-            onClick={() => navigate(`/dashboard/${party.id}?from=${activeTab}`)}
-            className="bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
-          >
-            <LayoutDashboard size={16} /> Dashboard
-          </button>
+            {isConductor && (
+              <MoreOptionsMenu
+                party={party}
+                canReopen={canReopen}
+                onReopenParty={onReopenParty}
+                onDeleteParty={onDeleteParty}
+              />
+            )}
+          </div>
         ) : (
           <button
             onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
-            className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm"
+            className="bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 w-32 rounded-lg text-sm"
           >
-            Join
+            Join Party
           </button>
         )}
       </div>

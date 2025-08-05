@@ -988,6 +988,12 @@ const ConductorDashboard = () => {
       review,
     });
     setMovieToReview(null);
+
+    setNotification({
+      show: true,
+      message: `${movieToReview.title} has been added to your movie history!`,
+      type: "success",
+    });
   };
 
   // --- NEW: Handler to add a movie to the full favorites list ---

@@ -530,6 +530,11 @@ const ViewWatchParty = () => {
       rating,
       review,
     });
+    setNotification({
+      show: true,
+      message: `${movieToReview.title} has been added to your movie history!`,
+      type: "success",
+    });
     setMovieToReview(null);
   };
 
