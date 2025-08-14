@@ -24,6 +24,8 @@ import {
   List,
   Grid,
   MoreVertical,
+  Merge,
+  MonitorPlay,
 } from "lucide-react";
 
 // --- NEW: A reusable "More Options" menu component ---
@@ -301,12 +303,6 @@ const PartyCard = ({
                 >
                   <LayoutDashboard size={18} /> Dashboard
                 </button>
-                <button
-                  onClick={() => onCrashParty(party.id)}
-                  className="flex-shrink-0 bg-gray-700 hover:bg-red-900 text-red-400 p-2 rounded-lg"
-                >
-                  <XCircle size={20} />
-                </button>
               </div>
             ) : (
               <button
@@ -529,19 +525,13 @@ const CompactPartyCard = ({
             >
               <LayoutDashboard size={16} /> Dashboard
             </button>
-            <button
-              onClick={() => onCrashParty(party.id)}
-              className="flex-shrink-0 bg-gray-700 hover:bg-red-900 text-red-400 p-2 rounded-lg"
-            >
-              <XCircle size={18} />
-            </button>
           </div>
         ) : (
           <button
             onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
-            className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm"
+            className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
           >
-            Join Party
+            <MonitorPlay size={16} /> Join
           </button>
         )}
       </div>
@@ -567,8 +557,11 @@ const ListPartyCard = ({
     new Date() - new Date(party.end_time) < 3600000;
 
   return (
-    <div className="bg-gray-800 rounded-lg p-3 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-4 truncate">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900/20 shadow-lg border border-slate-800 hover:border-indigo-500 transition-all duration-300 rounded-lg p-3 flex items-center justify-between gap-4">
+      <div
+        onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
+        className="flex items-center gap-4 truncate"
+      >
         <img
           src={
             party.featured_movie_image_url ||
@@ -606,12 +599,23 @@ const ListPartyCard = ({
               />
             )}
           </div>
+        ) : isConductor ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() =>
+                navigate(`/dashboard/${party.id}?from=${activeTab}`)
+              }
+              className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
+            >
+              <LayoutDashboard size={16} /> Dashboard
+            </button>
+          </div>
         ) : (
           <button
             onClick={() => navigate(`/party/${party.id}?from=${activeTab}`)}
-            className="bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 w-32 rounded-lg text-sm"
+            className="w-full bg-gray-700 hover:bg-indigo-900 text-indigo-400 font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"
           >
-            Join Party
+            <MonitorPlay size={16} /> Join
           </button>
         )}
       </div>
@@ -635,7 +639,21 @@ const ConductorsPage = () => {
   // --- NEW: State to manage the active tab ---
   const [activeTab, setActiveTab] = useState("conducting"); // 'conducting', 'active', 'concluded'
 
-  const [viewMode, setViewMode] = useState("card"); // 'card', 'compact', or 'list'
+  // --- MODIFIED: The initial state now comes from localStorage ---
+  const [viewMode, setViewMode] = useState(
+    localStorage.getItem("conductors_view_mode") || "card"
+  );
+
+  // --- NEW: This useEffect saves the view mode whenever it changes ---
+  useEffect(() => {
+    localStorage.setItem("conductors_view_mode", viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (location.state?.fromTab) {
+      setActiveTab(location.state.fromTab);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     // Check if state was passed during navigation
