@@ -323,6 +323,9 @@ const ConductorDashboard = () => {
   const { user } = useAuth();
   const userProfileRef = useRef();
 
+  // --- FIX STEP 1: Add a ref to track if the party is crashing ---
+  const isCrashing = useRef(false);
+
   const [party, setParty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -551,32 +554,33 @@ const ConductorDashboard = () => {
   // which in turn triggers the database functions to update the count.
   useEffect(() => {
     if (!partyId || !user) {
-      setLoading(false); // Stop loading if we don't have what we need
+      setLoading(false);
       return;
     }
 
     const joinParty = async () => {
-      await supabase.from("party_viewers").upsert(
-        {
-          party_id: partyId,
-          user_id: user.id,
-          username: user.user_metadata?.username || "Conductor",
-        },
-        { onConflict: "party_id, user_id" }
-      );
+      await supabase
+        .from("party_viewers")
+        .upsert(
+          { party_id: partyId, user_id: user.id },
+          { onConflict: "party_id, user_id" }
+        );
     };
 
     joinParty();
 
-    // The return function runs when the component unmounts (conductor leaves the page)
+    // The return function runs when the component unmounts
     return () => {
-      const leaveParty = async () => {
-        await supabase
-          .from("party_viewers")
-          .delete()
-          .match({ party_id: partyId, user_id: user.id });
-      };
-      leaveParty();
+      // Only run the delete logic if the 'isCrashing' flag is false
+      if (!isCrashing.current) {
+        const leaveParty = async () => {
+          await supabase
+            .from("party_viewers")
+            .delete()
+            .match({ party_id: partyId, user_id: user.id });
+        };
+        leaveParty();
+      }
     };
   }, [partyId, user]);
 
@@ -744,18 +748,15 @@ const ConductorDashboard = () => {
   };
 
   const handleCrashParty = () => {
-    if (nowPlayingMovieDetails) {
-      setShowCrashConfirmation(true);
-    } else {
-      updatePartyStatus({
-        status: "concluded",
-        end_time: new Date().toISOString(),
-      });
-      handleConfirmCrash(false);
-    }
+    // This function can now simply call the main confirmation logic
+    handleConfirmCrash(false);
   };
 
-  const handleConfirmCrash = (markAsWatched) => {
+  // --- FIX STEP 2: Set the ref to true inside this function ---
+  const handleConfirmCrash = async (markAsWatched) => {
+    isCrashing.current = true;
+    setLoading(true);
+
     const channel = supabase.channel(`party:${partyId}`);
     channel.send({
       type: "broadcast",
@@ -763,19 +764,76 @@ const ConductorDashboard = () => {
       payload: { message: "The conductor has ended the party." },
     });
     supabase.removeChannel(channel);
-    console.log("PARTY ID = " + partyId);
-    let updates = { status: "concluded", end_time: new Date().toISOString() };
+
+    let finalWatchedList = [...(party.movies_watched || [])];
     if (markAsWatched && nowPlayingMovieDetails) {
-      const finishedMovie = {
+      finalWatchedList.push({
         id: nowPlayingMovieDetails.id,
         status: "watched",
-      };
-      updates.movies_watched = [...(party.movies_watched || []), finishedMovie];
+      });
+    }
+    const finalWatchedDetails = await Promise.all(
+      finalWatchedList.map((m) => getMovieDetails(m.id))
+    );
+    const totalRuntimeSeconds = finalWatchedDetails.reduce(
+      (total, movie) => total + (movie?.runtime * 60 || 0),
+      0
+    );
+    const qualificationTime = totalRuntimeSeconds * 0.2;
+
+    // --- THIS IS THE CORRECTED LOGIC ---
+    // 1. Fetch participants from both sources.
+    const { data: timeParticipants } = await supabase
+      .from("party_view_time")
+      .select("user_id, total_view_time_seconds")
+      .eq("party_id", partyId);
+
+    const { data: actionParticipants } = await supabase
+      .from("movie_watch_history")
+      .select("user_id")
+      .eq("party_id", partyId);
+
+    // 2. Add them to a Set to get a unique list of all participants.
+    const qualifiedUserIds = new Set();
+    qualifiedUserIds.add(user.id); // The conductor always qualifies.
+
+    // 3. Check time-based qualifications.
+    if (timeParticipants) {
+      for (const participant of timeParticipants) {
+        if (participant.total_view_time_seconds >= qualificationTime) {
+          qualifiedUserIds.add(participant.user_id);
+        }
+      }
+    }
+
+    // 4. Check action-based qualifications.
+    if (actionParticipants) {
+      for (const participant of actionParticipants) {
+        qualifiedUserIds.add(participant.user_id);
+      }
+    }
+
+    // 5. Prepare and send the final, unique list to the database.
+    const viewersToSave = Array.from(qualifiedUserIds).map((userId) => ({
+      party_id: partyId,
+      user_id: userId,
+    }));
+
+    if (viewersToSave.length > 0) {
+      await supabase.rpc("save_qualified_viewers", {
+        viewers_data: viewersToSave,
+      });
+    }
+
+    let updates = { status: "concluded", end_time: new Date().toISOString() };
+    if (markAsWatched && nowPlayingMovieDetails) {
+      updates.movies_watched = finalWatchedList;
       updates.now_playing_tmdb_id = null;
     }
-    updatePartyStatus(updates);
+
+    await updatePartyStatus(updates);
     setShowCrashConfirmation(false);
-    navigate("/review-party/" + partyId);
+    navigate(`/review-party/${partyId}`);
   };
 
   const handleCancelCrash = () => {

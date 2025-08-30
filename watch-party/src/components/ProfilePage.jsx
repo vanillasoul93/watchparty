@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../contexts/Auth";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ReviewMovieModal from "./ReviewMovieModal";
 import {
   User,
@@ -21,6 +21,7 @@ import {
   Edit3,
   AlertTriangle,
   X,
+  ListPlus,
   Users as PartyIcon,
 } from "lucide-react";
 import { searchTMDb, getMovieDetailsWithCredits } from "../api/tmdb"; // Assuming your centralized search is here
@@ -374,6 +375,7 @@ const MovieReviewHistoryModal = ({
 
 const ProfilePage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState("favorites");
@@ -389,6 +391,9 @@ const ProfilePage = () => {
   // --- NEW STATE for history lists ---
   const [movieHistory, setMovieHistory] = useState([]);
   const [partyHistory, setPartyHistory] = useState([]);
+
+  // --- NEW: State for the user's movie lists ---
+  const [movieLists, setMovieLists] = useState([]);
 
   //State setting if a user wants review prompts.
   const [promptForReviews, setPromptForReviews] = useState(true);
@@ -584,7 +589,7 @@ const ProfilePage = () => {
         setLoading(true);
         if (!user) return;
 
-        const [profileRes, movieHistoryRes, partyHistoryRes] =
+        const [profileRes, movieHistoryRes, partyHistoryRes, listsRes] =
           await Promise.all([
             supabase.from("profiles").select("*").eq("id", user.id).single(),
             supabase
@@ -596,6 +601,11 @@ const ProfilePage = () => {
               .from("party_viewers")
               .select("watch_parties(*)")
               .eq("user_id", user.id),
+            supabase
+              .from("movie_lists")
+              .select("*")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false }),
           ]);
 
         if (profileRes.error && profileRes.error.code !== "PGRST116")
@@ -633,6 +643,9 @@ const ProfilePage = () => {
 
         if (partyHistoryRes.error) throw partyHistoryRes.error;
         setPartyHistory(partyHistoryRes.data || []);
+
+        if (listsRes.error) throw listsRes.error;
+        setMovieLists(listsRes.data || []);
       } catch (error) {
         setError("Could not fetch profile data.");
         console.error(error);
@@ -1103,6 +1116,16 @@ const ProfilePage = () => {
                       Favorites
                     </button>
                     <button
+                      onClick={() => setActiveTab("lists")}
+                      className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${
+                        activeTab === "lists"
+                          ? "border-indigo-500 text-indigo-400"
+                          : "border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500"
+                      }`}
+                    >
+                      Lists
+                    </button>
+                    <button
                       onClick={() => setActiveTab("movies")}
                       className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium ${
                         activeTab === "movies"
@@ -1169,7 +1192,7 @@ const ProfilePage = () => {
                           onAdd={handleAddFavorite}
                           existingFavorites={allFavoriteMovies}
                         />
-                        <div className="space-y-3 mt-4 max-h-96 overflow-y-auto pr-2">
+                        <div className="space-y-3 mt-4 max-h-96 overflow-y-auto pr-2 pb-1">
                           {allFavoriteMovies.map((movie) => (
                             <div
                               key={movie.id}
@@ -1234,6 +1257,40 @@ const ProfilePage = () => {
                   )}
                   {activeTab === "parties" && (
                     <PartyHistoryList history={partyHistory} />
+                  )}
+                  {activeTab === "lists" && (
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => navigate("/create-list")}
+                          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+                        >
+                          <ListPlus size={20} /> Create New List
+                        </button>
+                      </div>
+                      {movieLists.length > 0 ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                          {movieLists.map((list) => (
+                            <Link
+                              to={`/list/${list.id}/edit`}
+                              key={list.id}
+                              className="block bg-gray-700 p-4 rounded-lg hover:bg-gray-600 transition-colors"
+                            >
+                              <h4 className="font-bold text-white text-lg">
+                                {list.list_name}
+                              </h4>
+                              <p className="text-sm text-gray-400">
+                                {list.movies?.length || 0} movies
+                              </p>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-center py-8">
+                          You haven't created any movie lists yet.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

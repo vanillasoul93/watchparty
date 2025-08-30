@@ -231,7 +231,6 @@ const ViewWatchParty = () => {
         {
           party_id: partyId,
           user_id: user.id,
-          username: user.user_metadata?.username || "Anonymous",
         },
         { onConflict: "party_id, user_id" }
       ); // Use onConflict to prevent errors on refresh
@@ -312,7 +311,16 @@ const ViewWatchParty = () => {
           table: "watch_parties",
           filter: `id=eq.${partyId}`,
         },
-        (payload) => setParty(payload.new)
+        (payload) => {
+          const updatedParty = payload.new;
+          // --- ADDED: A fallback check ---
+          // If the party status changes to 'concluded', redirect the viewer.
+          if (updatedParty.status === "concluded") {
+            navigate(`/review-party/${partyId}`);
+          } else {
+            setParty(updatedParty);
+          }
+        }
       )
       .on(
         "postgres_changes",
@@ -364,6 +372,8 @@ const ViewWatchParty = () => {
         }
       )
       .on("broadcast", { event: "party-crashed" }, (payload) => {
+        console.log("Party crashed event received!", payload);
+        // Redirect the viewer to the review page.
         navigate(`/review-party/${partyId}`);
       })
       .subscribe(async (status) => {
@@ -463,6 +473,33 @@ const ViewWatchParty = () => {
     };
     fetchAllMovieDetails();
   }, [party]);
+
+  // This effect tracks the user's active watch time
+  useEffect(() => {
+    let intervalId = null;
+    const incrementInterval = 15; // We'll update the database every 15 seconds
+
+    // The interval should only run when the party is actively playing
+    if (party?.party_state?.status === "playing") {
+      intervalId = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          // Only track if the tab is active
+          supabase
+            .rpc("increment_view_time", {
+              p_party_id: partyId,
+              p_user_id: user.id,
+              p_seconds: incrementInterval,
+            })
+            .then(({ error }) => {
+              if (error) console.error("Failed to update view time:", error);
+            });
+        }
+      }, incrementInterval * 1000);
+    }
+
+    // Cleanup the interval when the component unmounts or the play state changes
+    return () => clearInterval(intervalId);
+  }, [party?.party_state?.status, partyId, user]);
 
   const handleVote = async (movieTmdbId) => {
     // Use the dynamic value from the party object, with a fallback to 3

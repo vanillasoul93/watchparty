@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { PlayCircle, LogOut, X, Menu } from "lucide-react"; // Import Menu and X icons
 import { useAuth } from "../contexts/Auth";
 
-const navLinks = ["Home", "Conductor Hub", "Create Party", "Profile"];
+const navLinks = ["Home", "Conductor Hub", "Lists", "Create Party", "Profile"];
 
 const Navbar = () => {
   const { user, signOut } = useAuth();

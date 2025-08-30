@@ -18,6 +18,9 @@ import ConductorDashboard from "./components/ConductorDashboard";
 import ViewWatchParty from "./components/ViewWatchParty";
 import ProtectedRoute from "./components/ProtectedRoute"; // Import our new component
 import ReviewParty from "./components/ReviewParty";
+import CreateListPage from "./components/CreateListPage";
+import ListsPage from "./components/ListsPage";
+import PublicListPage from "./components/PublicListPage";
 
 // This Layout component includes the shared Navbar and Footer.
 // The <Outlet> component renders the specific child route component.
@@ -63,6 +66,10 @@ const AppContent = () => {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:username" element={<PublicProfilePage />} />
           <Route path="/review-party/:partyId" element={<ReviewParty />} />
+          <Route path="/lists" element={<ListsPage />} />
+          <Route path="/create-list" element={<CreateListPage />} />
+          <Route path="/list/:listId/edit" element={<CreateListPage />} />
+          <Route path="/list/:listId" element={<PublicListPage />} />
         </Route>
 
         {/* Full-screen routes without Navbar/Footer */}
