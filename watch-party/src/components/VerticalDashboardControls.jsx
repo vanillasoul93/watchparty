@@ -41,7 +41,7 @@ const DashboardControls = ({
         ) : (
           <>
             {/* --- MODIFIED: Restructured the input cell --- */}
-            <div className="flex flex-col items-center justify-center bg-gray-900/80 shadow-lg shadow-black/20 rounded-lg p-2 px-5">
+            <div className="flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors hover:bg-indigo-900 shadow-lg shadow-black/30 rounded-lg p-2 px-5">
               {/* 1. New 'relative' container for precise positioning */}
               <div className="relative w-full h-full">
                 <input
@@ -49,7 +49,7 @@ const DashboardControls = ({
                   value={customIntermissionMinutes}
                   onChange={(e) => setCustomIntermissionMinutes(e.target.value)}
                   // Added pr-8 (padding-right) to make space for the buttons
-                  className="bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-2 pr-8 w-full h-full text-center text-2xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="bg-slate-800 border-2 border-gray-600 text-white rounded-lg p-2 pr-8 w-full h-full text-center text-2xl outline-none focus:border-indigo-700  [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   min="1"
                 />
                 {/* These buttons are now positioned relative to the new container */}
@@ -73,7 +73,7 @@ const DashboardControls = ({
 
             <button
               onClick={() => onSetIntermission(customIntermissionMinutes)}
-              className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 rounded-lg flex flex-col items-center justify-center gap-2 w-full h-full text-yellow-400 hover:bg-yellow-900"
+              className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-color shadow-lg shadow-black/30 p-3 rounded-lg flex flex-col items-center justify-center gap-2 w-full h-full text-yellow-400 hover:bg-yellow-900"
             >
               <Timer size={24} />
               <span className="font-semibold">Set Intermission</span>
@@ -85,7 +85,7 @@ const DashboardControls = ({
         {playState === "playing" ? (
           <button
             onClick={onPause}
-            className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 rounded-lg flex flex-col items-center justify-center gap-2 w-full h-full text-yellow-400 hover:bg-yellow-900 disabled:opacity-50"
+            className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-lg shadow-black/30 p-3 rounded-lg flex flex-col items-center justify-center gap-2 w-full h-full text-yellow-400 hover:bg-yellow-900 disabled:opacity-50"
           >
             <Pause size={24} />
             <span className="font-semibold">Pause</span>
@@ -93,7 +93,7 @@ const DashboardControls = ({
         ) : (
           <button
             onClick={onPlay}
-            className="w-full bg-gray-900/80 shadow-lg shadow-black/20 p-3 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-green-900 text-green-400 disabled:opacity-50"
+            className="w-full bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-lg shadow-black/30 p-3 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-green-900 text-green-400 disabled:opacity-50"
           >
             <Play size={24} />
             <span className="font-semibold">Play</span>
@@ -102,7 +102,7 @@ const DashboardControls = ({
 
         <button
           onClick={onCrashParty}
-          className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 w-full rounded-lg flex flex-col items-center justify-center h-full gap-2 text-red-400 hover:bg-red-900"
+          className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-lg shadow-black/30 p-3 w-full rounded-lg flex flex-col items-center justify-center h-full gap-2 text-red-400 hover:bg-red-900"
         >
           <XCircle size={24} />
           <span className="font-semibold">Crash Party</span>

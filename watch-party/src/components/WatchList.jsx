@@ -221,7 +221,7 @@ const WatchList = ({
             return (
               <li
                 key={`${movie.id}-${originalIndex}`}
-                className="bg-gray-900/80 shadow-lg shadow-black/20 p-3 mr-4 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-2 hover:ring-indigo-500/30 hover:bg-slate-800 "
+                className="bg-gradient-to-br from-slate-800 to-slate-900/20 shadow-black/20 shadow-lg hover:bg-indigo-900 p-3 mr-4 rounded-md flex items-center justify-between transition-all duration-200 hover:shadow-lg "
               >
                 <div
                   onClick={() => setSelectedMovieId(movie.id)}

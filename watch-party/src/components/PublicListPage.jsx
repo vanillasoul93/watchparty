@@ -485,7 +485,7 @@ const PublicListPage = () => {
               {list.movies?.map((movie) => (
                 <div
                   key={movie.id}
-                  className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-black/10 shadow-lg p-3 rounded-lg flex items-center justify-between gap-4 hover:bg-indigo-950"
+                  className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-black/10 shadow-lg p-3 rounded-lg flex items-center justify-between gap-4 hover:bg-indigo-900"
                 >
                   <div
                     onClick={() => setSelectedMovieId(movie.id)}

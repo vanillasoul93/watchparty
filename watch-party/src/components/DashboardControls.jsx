@@ -46,7 +46,7 @@ const DashboardControls = ({
               </div>
               <button
                 onClick={() => onSetIntermission(customIntermissionMinutes)}
-                className="bg-gray-700 text-amber-400 p-2 rounded-lg flex-grow flex w-full items-center justify-center hover:bg-amber-900"
+                className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-black/10 shadow-lg text-amber-400 p-2 rounded-lg flex-grow flex w-full items-center justify-center hover:bg-amber-900"
               >
                 <Timer size={20} />
                 <span className="ml-2">Set Intermission</span>

@@ -265,7 +265,7 @@ const ReviewParty = () => {
                   <div
                     key={movie.id}
                     onClick={() => setSelectedMovieId(movie.id)}
-                    className="bg-slate-900 p-3 rounded-lg flex items-center gap-4 shadow-lg shadow-black/20 hover:bg-slate-800 hover:outline-1 hover:outline-indigo-600 cursor-pointer"
+                    className="bg-gradient-to-br from-slate-800 to-slate-900/20 transition-colors shadow-black/20 shadow-lg hover:bg-indigo-900 p-3 rounded-lg flex items-center gap-4 cursor-pointer"
                   >
                     <img
                       src={movie.imageUrl}
