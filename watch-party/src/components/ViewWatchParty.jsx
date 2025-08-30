@@ -269,6 +269,13 @@ const ViewWatchParty = () => {
         return;
       }
 
+      // --- THIS IS THE FIX ---
+      // 1. First, check if the party is concluded and redirect if so.
+      if (data.status === "concluded") {
+        navigate(`/review-party/${partyId}`, { replace: true });
+        return; // Stop execution
+      }
+
       // --- THIS IS THE SECURITY FIX ---
       // After fetching the party, check if the current user is the conductor.
       if (data.conductor_id === user.id) {

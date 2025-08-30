@@ -246,8 +246,8 @@ const MovieHistoryList = ({ groupedHistory, onSelectMovie, onDelete }) => {
   );
 };
 
-// New component to display Party History
-const PartyHistoryList = ({ history }) => {
+// --- THIS IS THE FIXED COMPONENT ---
+const PartyHistoryList = ({ history, currentUser }) => {
   if (!history || history.length === 0) {
     return (
       <p className="text-gray-400 text-center py-4">No party history found.</p>
@@ -256,10 +256,23 @@ const PartyHistoryList = ({ history }) => {
 
   return (
     <div className="space-y-3">
-      {history.map(({ watch_parties: party }) =>
-        party ? (
+      {history.map(({ watch_parties: party }) => {
+        if (!party) return null;
+
+        const isConductor = User.id === party.conductor_id;
+        let destination = "";
+
+        if (party.status === "concluded") {
+          destination = `/review-party/${party.id}`;
+        } else {
+          destination = isConductor
+            ? `/dashboard/${party.id}`
+            : `/party/${party.id}`;
+        }
+
+        return (
           <Link
-            to={`/party/${party.id}`}
+            to={destination}
             key={party.id}
             className="block bg-gray-700 p-3 rounded-lg hover:bg-gray-600 transition"
           >
@@ -268,8 +281,8 @@ const PartyHistoryList = ({ history }) => {
               on {new Date(party.created_at).toLocaleDateString()}
             </p>
           </Link>
-        ) : null
-      )}
+        );
+      })}
     </div>
   );
 };

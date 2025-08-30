@@ -361,6 +361,27 @@ const ConductorDashboard = () => {
     type: "",
   });
 
+  // This useEffect handles authorization
+  useEffect(() => {
+    if (user && party) {
+      if (party.conductor_id === user.id) {
+        // --- THIS IS THE FIX ---
+        // Before authorizing, check if the party is concluded.
+        if (party.status === "concluded") {
+          navigate(`/review-party/${partyId}`, { replace: true });
+          return; // Stop and redirect
+        }
+
+        setIsAuthorized(true);
+        setLoading(false);
+      } else {
+        setError("Access Denied: You are not the conductor of this party.");
+        setLoading(false);
+        setTimeout(() => navigate("/conductors"), 3000);
+      }
+    }
+  }, [party, user, navigate]);
+
   useEffect(() => {
     const fetchModalData = async () => {
       if (selectedMovieId) {
